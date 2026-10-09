@@ -25,13 +25,105 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectVa
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/lib/api";
+import { useI18n } from "@/lib/i18n/i18n-context";
 import type { FindingTraffic, FindingTrafficBinding, TrafficEvidenceRole } from "@/lib/types";
 
-const ROLES: Record<TrafficEvidenceRole, string> = {
-  baseline: "正常对照",
-  proof: "漏洞证明",
-  verification: "补充验证",
-  supporting: "辅助证据",
+const I18N = {
+  en: {
+    roles: {
+      baseline: "Normal Baseline",
+      proof: "PoC Exploit / Proof",
+      verification: "Supplementary Verification",
+      supporting: "Supporting Evidence",
+    },
+    updated: "Traffic evidence updated",
+    title: (count: number) => `Associated Traffic (${count})`,
+    titleEmpty: "Associated Traffic",
+    bindTraffic: "Bind Traffic",
+    inheritedReadOnly: "Inherited Evidence · Read-only",
+    description:
+      "Organize requests and responses in reproduction order. Bound evidence is retained even after raw traffic is cleared.",
+    retry: "Retry",
+    emptyTitle: "No Associated Traffic",
+    emptyDescription: "Bind normal baselines, vulnerability proofs, or verification requests.",
+    evidenceHash: (id: string) => `Evidence #${id}`,
+    viewPacket: "View Packet",
+    editNote: "Edit Note",
+    moveUpAria: (id: string) => `Move evidence #${id} up`,
+    moveDownAria: (id: string) => `Move evidence #${id} down`,
+    unbind: "Unbind",
+    dialogTitle: "Edit Traffic Evidence",
+    dialogDescription: "Explain how this request/response supports the vulnerability conclusion.",
+    fieldRole: "Role",
+    fieldNote: "Evidence Note",
+    cancel: "Cancel",
+    saveNote: "Save Note",
+  },
+  pt: {
+    roles: {
+      baseline: "Linha de Base Normal",
+      proof: "Prova de Conceito (PoC)",
+      verification: "Verificação Suplementar",
+      supporting: "Evidência de Suporte",
+    },
+    updated: "Evidência de tráfego atualizada",
+    title: (count: number) => `Tráfego Associado (${count})`,
+    titleEmpty: "Tráfego Associado",
+    bindTraffic: "Vincular Tráfego",
+    inheritedReadOnly: "Evidência Herdada · Somente leitura",
+    description:
+      "Organize requisições e respostas na ordem de reprodução. As evidências vinculadas são mantidas mesmo após limpar o tráfego bruto.",
+    retry: "Tentar novamente",
+    emptyTitle: "Nenhum Tráfego Associado",
+    emptyDescription: "Vincule referências de linha de base, provas de vulnerabilidade e requisições de validação.",
+    evidenceHash: (id: string) => `Evidência #${id}`,
+    viewPacket: "Ver Pacote",
+    editNote: "Editar Nota",
+    moveUpAria: (id: string) => `Mover evidência #${id} para cima`,
+    moveDownAria: (id: string) => `Mover evidência #${id} para baixo`,
+    unbind: "Desvincular",
+    dialogTitle: "Editar Evidência de Tráfego",
+    dialogDescription: "Explique como esta requisição/resposta sustenta a conclusão da vulnerabilidade.",
+    fieldRole: "Função",
+    fieldNote: "Nota da Evidência",
+    cancel: "Cancelar",
+    saveNote: "Salvar Nota",
+  },
+  zh: {
+    roles: {
+      baseline: "正常对照",
+      proof: "漏洞证明",
+      verification: "补充验证",
+      supporting: "辅助证据",
+    },
+    updated: "流量证据已更新",
+    title: (count: number) => `关联流量 (${count})`,
+    titleEmpty: "关联流量",
+    bindTraffic: "绑定流量",
+    inheritedReadOnly: "继承证据 · 只读",
+    description: "按复现顺序组织请求与响应。清理原始流量后，已绑定证据仍然保留。",
+    retry: "重试",
+    emptyTitle: "暂无关联流量",
+    emptyDescription: "可绑定正常对照、漏洞证明和补充验证请求。",
+    evidenceHash: (id: string) => `证据 #${id}`,
+    viewPacket: "查看报文",
+    editNote: "编辑说明",
+    moveUpAria: (id: string) => `上移证据 ${id}`,
+    moveDownAria: (id: string) => `下移证据 ${id}`,
+    unbind: "解除绑定",
+    dialogTitle: "编辑流量证据",
+    dialogDescription: "说明这组请求/响应如何支持漏洞结论。",
+    fieldRole: "用途",
+    fieldNote: "证据说明",
+    cancel: "取消",
+    saveNote: "保存说明",
+  },
+};
+
+const DATE_LOCALES: Record<string, string> = {
+  zh: "zh-CN",
+  pt: "pt-BR",
+  en: "en-US",
 };
 
 export function FindingTrafficPanel({
@@ -45,6 +137,10 @@ export function FindingTrafficPanel({
   readOnly?: boolean;
   onChanged: () => void;
 }) {
+  const { locale } = useI18n();
+  const t = I18N[locale] ?? I18N.en;
+  const dateLocale = DATE_LOCALES[locale] ?? "en-US";
+
   const [data, setData] = React.useState<FindingTraffic | null>(null);
   const [error, setError] = React.useState("");
   const [adding, setAdding] = React.useState(false);
@@ -54,6 +150,7 @@ export function FindingTrafficPanel({
   const [note, setNote] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const [reload, setReload] = React.useState(0);
+
   // biome-ignore lint/correctness/useExhaustiveDependencies: retry token intentionally refreshes this request.
   React.useEffect(() => {
     let active = true;
@@ -78,7 +175,7 @@ export function FindingTrafficPanel({
       setData(await action());
       setEditing(null);
       onChanged();
-      toast.success("流量证据已更新");
+      toast.success(t.updated);
     } catch (e) {
       toast.error((e as Error).message);
       setReload((n) => n + 1);
@@ -99,17 +196,17 @@ export function FindingTrafficPanel({
       <Card>
         <CardHeader>
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <CardTitle>关联流量 {data ? `(${data.bindings.length})` : ""}</CardTitle>
+            <CardTitle>{data ? t.title(data.bindings.length) : t.titleEmpty}</CardTitle>
             {!readOnly ? (
               <Button variant="outline" size="sm" disabled={!data || busy} onClick={() => setAdding(true)}>
                 <PlusIcon data-icon="inline-start" />
-                绑定流量
+                {t.bindTraffic}
               </Button>
             ) : (
-              <Badge variant="outline">继承证据 · 只读</Badge>
+              <Badge variant="outline">{t.inheritedReadOnly}</Badge>
             )}
           </div>
-          <CardDescription>按复现顺序组织请求与响应。清理原始流量后，已绑定证据仍然保留。</CardDescription>
+          <CardDescription>{t.description}</CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
           {error ? (
@@ -117,7 +214,7 @@ export function FindingTrafficPanel({
               <AlertDescription>
                 {error}
                 <Button variant="link" onClick={() => setReload((n) => n + 1)}>
-                  重试
+                  {t.retry}
                 </Button>
               </AlertDescription>
             </Alert>
@@ -127,8 +224,8 @@ export function FindingTrafficPanel({
           ) : data.bindings.length === 0 ? (
             <Empty>
               <EmptyHeader>
-                <EmptyTitle>暂无关联流量</EmptyTitle>
-                <EmptyDescription>可绑定正常对照、漏洞证明和补充验证请求。</EmptyDescription>
+                <EmptyTitle>{t.emptyTitle}</EmptyTitle>
+                <EmptyDescription>{t.emptyDescription}</EmptyDescription>
               </EmptyHeader>
             </Empty>
           ) : (
@@ -136,12 +233,12 @@ export function FindingTrafficPanel({
               <div key={b.id} className="flex min-w-0 flex-col gap-2 rounded-md border p-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <Badge variant="outline">
-                    {index + 1}. {ROLES[b.role]}
+                    {index + 1}. {t.roles[b.role] ?? b.role}
                   </Badge>
                   <Badge variant="secondary">
                     {b.snapshot.method} · {b.snapshot.status}
                   </Badge>
-                  <span className="text-xs text-muted-foreground">证据 #{b.id}</span>
+                  <span className="text-xs text-muted-foreground">{t.evidenceHash(b.id)}</span>
                 </div>
                 <Button
                   variant="link"
@@ -153,11 +250,11 @@ export function FindingTrafficPanel({
                 {b.note ? <p className="text-sm whitespace-pre-wrap">{b.note}</p> : null}
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="text-xs text-muted-foreground">
-                    {new Date(b.snapshot.captured_at * 1000).toLocaleString("zh-CN")}
+                    {new Date(b.snapshot.captured_at * 1000).toLocaleString(dateLocale)}
                   </span>
                   <div className="flex flex-wrap gap-1">
                     <Button variant="outline" size="sm" onClick={() => setPreview(b.id)}>
-                      查看报文
+                      {t.viewPacket}
                     </Button>
                     {!readOnly ? (
                       <>
@@ -171,12 +268,12 @@ export function FindingTrafficPanel({
                             setNote(b.note);
                           }}
                         >
-                          编辑说明
+                          {t.editNote}
                         </Button>
                         <Button
                           variant="ghost"
                           size="icon-sm"
-                          aria-label={`上移证据 ${b.id}`}
+                          aria-label={t.moveUpAria(b.id)}
                           disabled={busy || index === 0}
                           onClick={() => move(index, -1)}
                         >
@@ -185,7 +282,7 @@ export function FindingTrafficPanel({
                         <Button
                           variant="ghost"
                           size="icon-sm"
-                          aria-label={`下移证据 ${b.id}`}
+                          aria-label={t.moveDownAria(b.id)}
                           disabled={busy || index === data.bindings.length - 1}
                           onClick={() => move(index, 1)}
                         >
@@ -199,7 +296,7 @@ export function FindingTrafficPanel({
                             void mutate(() => api.removeFindingTraffic(findingId, b.id, data.version, contextTask))
                           }
                         >
-                          解除绑定
+                          {t.unbind}
                         </Button>
                       </>
                     ) : null}
@@ -236,19 +333,19 @@ export function FindingTrafficPanel({
       >
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>编辑流量证据</DialogTitle>
-            <DialogDescription>说明这组请求/响应如何支持漏洞结论。</DialogDescription>
+            <DialogTitle>{t.dialogTitle}</DialogTitle>
+            <DialogDescription>{t.dialogDescription}</DialogDescription>
           </DialogHeader>
           <FieldGroup>
             <Field>
-              <FieldLabel htmlFor="evidence-role">用途</FieldLabel>
+              <FieldLabel htmlFor="evidence-role">{t.fieldRole}</FieldLabel>
               <Select value={role} onValueChange={(v) => setRole(v as TrafficEvidenceRole)}>
                 <SelectTrigger id="evidence-role">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectGroup>
-                    {Object.entries(ROLES).map(([value, label]) => (
+                    {Object.entries(t.roles).map(([value, label]) => (
                       <SelectItem key={value} value={value}>
                         {label}
                       </SelectItem>
@@ -258,13 +355,13 @@ export function FindingTrafficPanel({
               </Select>
             </Field>
             <Field>
-              <FieldLabel htmlFor="evidence-note">证据说明</FieldLabel>
+              <FieldLabel htmlFor="evidence-note">{t.fieldNote}</FieldLabel>
               <Textarea id="evidence-note" value={note} onChange={(e) => setNote(e.target.value)} />
             </Field>
           </FieldGroup>
           <DialogFooter>
             <Button variant="outline" disabled={busy} onClick={() => setEditing(null)}>
-              取消
+              {t.cancel}
             </Button>
             <Button
               disabled={busy || !editing || !data}
@@ -275,7 +372,7 @@ export function FindingTrafficPanel({
                   );
               }}
             >
-              保存说明
+              {t.saveNote}
             </Button>
           </DialogFooter>
         </DialogContent>

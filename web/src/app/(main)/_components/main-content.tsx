@@ -4,10 +4,12 @@ import { type ReactNode, useEffect, useState } from "react";
 
 import { usePathname } from "next/navigation";
 
+import { LanguageSwitcher } from "@/components/language-switcher";
 import { Separator } from "@/components/ui/separator";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useCurrentUser } from "@/hooks/use-current-user";
 import { api } from "@/lib/api";
+import { useI18n } from "@/lib/i18n/i18n-context";
 import { cn } from "@/lib/utils";
 
 import { AccountSwitcher } from "./sidebar/account-switcher";
@@ -16,7 +18,6 @@ import { SearchDialog } from "./sidebar/search-dialog";
 import { ThemeSwitcher } from "./sidebar/theme-switcher";
 import { UpdateBadge } from "./update-badge";
 
-// 任务详情页保持原样：它自带头部/Tabs 与内边距，这里不再叠加全局头部和 padding。
 function isFullBleed(pathname: string) {
   const p = (() => {
     try {
@@ -25,8 +26,6 @@ function isFullBleed(pathname: string) {
       return pathname;
     }
   })();
-  // 静态导出开了 trailingSlash，列表页自身的 pathname 是 "/function/tasks/"，
-  // 先去掉尾斜杠再判前缀，否则列表页会被误判成详情页而丢掉全局头部。
   const normalized = p.replace(/\/+$/, "");
   return normalized.startsWith("/function/tasks/");
 }
@@ -35,6 +34,7 @@ export function MainContent({ children }: { children: ReactNode }) {
   const currentUser = useCurrentUser();
   const pathname = usePathname();
   const [version, setVersion] = useState("");
+  const { d } = useI18n();
 
   useEffect(() => {
     api
@@ -66,11 +66,14 @@ export function MainContent({ children }: { children: ReactNode }) {
           </div>
           <div className="flex items-center gap-2">
             {version && (
-              <span className="font-medium text-muted-foreground text-xs tabular-nums">版本 · {version}</span>
+              <span className="font-medium text-muted-foreground text-xs tabular-nums">
+                {d.header.version} · {version}
+              </span>
             )}
             <UpdateBadge />
-            <LayoutControls />
+            <LanguageSwitcher />
             <ThemeSwitcher />
+            <LayoutControls />
             <AccountSwitcher users={[currentUser]} />
           </div>
         </div>

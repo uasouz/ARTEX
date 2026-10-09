@@ -13,9 +13,16 @@ export function StatTile({ label, value, hint, tone }: { label: string; value: s
 }
 
 // formatBacklog 把积压毫秒数渲染成人看得懂的量级。
-export function formatBacklog(ms: number): string {
+export function formatBacklog(ms: number, locale: "en" | "pt" | "zh" = "en"): string {
   if (!ms) return "—";
-  if (ms < 60_000) return `${Math.round(ms / 1000)} 秒`;
-  if (ms < 3_600_000) return `${Math.round(ms / 60_000)} 分钟`;
-  return `${(ms / 3_600_000).toFixed(1)} 小时`;
+  if (ms < 60_000) {
+    const s = Math.round(ms / 1000);
+    return locale === "pt" ? `${s} s` : locale === "zh" ? `${s} 秒` : `${s}s`;
+  }
+  if (ms < 3_600_000) {
+    const m = Math.round(ms / 60_000);
+    return locale === "pt" ? `${m} min` : locale === "zh" ? `${m} 分钟` : `${m}m`;
+  }
+  const h = (ms / 3_600_000).toFixed(1);
+  return locale === "pt" ? `${h} h` : locale === "zh" ? `${h} 小时` : `${h}h`;
 }

@@ -60,6 +60,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { api } from "@/lib/api";
 import { parseCompanyScopeText } from "@/lib/company-scope";
+import { useI18n } from "@/lib/i18n/i18n-context";
 import type { Asset, Company, CompanyScopeRule } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -97,17 +98,42 @@ function statusTone(code: number) {
 
 const PAGE_SIZES = [25, 50, 100, 200];
 
-const TABS: { key: string; label: string; icon: LucideIcon }[] = [
-  { key: "company", label: "企业", icon: BuildingIcon },
-  { key: "root_domain", label: "根域名", icon: GlobeIcon },
-  { key: "ip", label: "IP", icon: NetworkIcon },
-  { key: "subdomain", label: "子域名", icon: GlobeIcon },
-  { key: "app", label: "应用", icon: SmartphoneIcon },
-  { key: "service", label: "服务", icon: LayoutTemplateIcon },
-  { key: "endpoint", label: "接口", icon: LinkIcon },
-];
+function getTabs(locale: string): { key: string; label: string; icon: LucideIcon }[] {
+  if (locale === "pt") {
+    return [
+      { key: "company", label: "Empresas", icon: BuildingIcon },
+      { key: "root_domain", label: "Domínios raiz", icon: GlobeIcon },
+      { key: "ip", label: "IP", icon: NetworkIcon },
+      { key: "subdomain", label: "Subdomínios", icon: GlobeIcon },
+      { key: "app", label: "Aplicações", icon: SmartphoneIcon },
+      { key: "service", label: "Serviços", icon: LayoutTemplateIcon },
+      { key: "endpoint", label: "Endpoints", icon: LinkIcon },
+    ];
+  }
+  if (locale === "zh") {
+    return [
+      { key: "company", label: "企业", icon: BuildingIcon },
+      { key: "root_domain", label: "根域名", icon: GlobeIcon },
+      { key: "ip", label: "IP", icon: NetworkIcon },
+      { key: "subdomain", label: "子域名", icon: GlobeIcon },
+      { key: "app", label: "应用", icon: SmartphoneIcon },
+      { key: "service", label: "服务", icon: LayoutTemplateIcon },
+      { key: "endpoint", label: "接口", icon: LinkIcon },
+    ];
+  }
+  return [
+    { key: "company", label: "Companies", icon: BuildingIcon },
+    { key: "root_domain", label: "Root Domains", icon: GlobeIcon },
+    { key: "ip", label: "IP", icon: NetworkIcon },
+    { key: "subdomain", label: "Subdomains", icon: GlobeIcon },
+    { key: "app", label: "Apps", icon: SmartphoneIcon },
+    { key: "service", label: "Services", icon: LayoutTemplateIcon },
+    { key: "endpoint", label: "Endpoints", icon: LinkIcon },
+  ];
+}
 
 export default function AssetsPage() {
+  const { locale } = useI18n();
   const [rows, setRows] = React.useState<Asset[]>([]);
   const [total, setTotal] = React.useState(0);
   const [companies, setCompanies] = React.useState<Company[]>([]);
@@ -133,6 +159,125 @@ export default function AssetsPage() {
   const [companyDeleteTarget, setCompanyDeleteTarget] = React.useState<Company | null>(null);
   const [companyDeleteAssets, setCompanyDeleteAssets] = React.useState(false);
   const [companyDeleting, setCompanyDeleting] = React.useState(false);
+
+  const tabs = React.useMemo(() => getTabs(locale), [locale]);
+
+  const strings = React.useMemo(() => {
+    if (locale === "pt") {
+      return {
+        title: "Ativos",
+        totalAssets: (n: number) => `Total de ${n} ativos`,
+        deleteSelected: (n: number) => `Excluir selecionados (${n})`,
+        refresh: "Atualizar",
+        newCompany: "Nova Empresa",
+        companyCols: ["Empresa", "Ativos", "Escopo de Ativos", "Ações"],
+        noScope: "Sem escopo definido",
+        edit: "Editar",
+        append: "Adicionar",
+        deleteCompanyAria: (name: string) => `Excluir empresa ${name}`,
+        emptyCompanies:
+          'Nenhuma empresa cadastrada. Clique em "Nova Empresa" acima para definir o escopo de ativos e iniciar o mapeamento automático.',
+        rootDomainCols: ["", "Domínio", "Registro ICP", "Empresa Associada", ""],
+        ipCols: ["", "IP", "Bloco C", "Domínios Associados", "Portas Abertas", ""],
+        subdomainCols: ["", "Domínio", "Domínio Raiz", "Tipo de Registro", "Valor de Registro", ""],
+        appCols: ["", "Nome do App", "Bundle ID", "Categoria", "Registro ICP", ""],
+        serviceCols: ["", "Serviço", "Domínio", "IP", "Porta", "Status", "Título", "Fingerprints", "Autenticação", ""],
+        endpointCols: ["", "Método", "URL Completa", "Parâmetros", ""],
+        unassigned: "Não associada",
+        auth: "Autenticação",
+        deleteAssetAria: (label: string) => `Excluir ativo ${label}`,
+        confirmDeleteTitle: "Confirmar exclusão",
+        confirmDeleteDesc: (n: number) =>
+          `Serão excluídos permanentemente ${n} registros de ativos. Esta ação não pode ser desfeita.`,
+        cancel: "Cancelar",
+        confirmDelete: "Confirmar exclusão",
+        deleting: "Excluindo…",
+        deleteCompanyTitle: (name: string) => `Excluir empresa · ${name}`,
+        deleteCompanyDesc:
+          "Esta ação excluirá permanentemente a empresa e suas configurações de escopo, de forma irreversível.",
+        deleteCompanyAssetsLabel: "Excluir também todos os ativos associados a esta empresa",
+        deleteCompanyAssetsHint: "Se desmarcado, os ativos serão mantidos e apenas o vínculo será removido",
+        deletedAssetsSuccess: (n: number) => `Excluído(s) ${n} ativo(s)`,
+        deleteFailed: (msg: string) => `Falha na exclusão: ${msg}`,
+        deletedCompanyAndAssets: (n: number) => `Empresa excluída, juntamente com ${n} ativos`,
+        deletedCompanySuccess: "Empresa excluída com sucesso",
+      };
+    }
+    if (locale === "zh") {
+      return {
+        title: "资产",
+        totalAssets: (n: number) => `共 ${n} 项资产`,
+        deleteSelected: (n: number) => `删除已选 (${n})`,
+        refresh: "刷新",
+        newCompany: "新增企业",
+        companyCols: ["企业", "资产数", "资产范围", "操作"],
+        noScope: "未设置范围",
+        edit: "编辑",
+        append: "追加",
+        deleteCompanyAria: (name: string) => `删除企业 ${name}`,
+        emptyCompanies: "还没有企业。点击右上角「新增企业」并填写资产范围，系统会自动认领命中的资产。",
+        rootDomainCols: ["", "域名", "ICP 备案", "归属企业", ""],
+        ipCols: ["", "IP", "C段", "绑定域名", "开放端口", ""],
+        subdomainCols: ["", "域名", "根域名", "解析类型", "解析值", ""],
+        appCols: ["", "应用名", "Bundle ID", "分类", "ICP 备案", ""],
+        serviceCols: ["", "服务", "域名", "IP", "端口", "状态码", "标题", "指纹", "认证", ""],
+        endpointCols: ["", "方法", "完整地址", "参数", ""],
+        unassigned: "未归属",
+        auth: "认证",
+        deleteAssetAria: (label: string) => `删除资产 ${label}`,
+        confirmDeleteTitle: "确认删除",
+        confirmDeleteDesc: (n: number) => `将永久删除 ${n} 条资产记录，此操作不可撤销。`,
+        cancel: "取消",
+        confirmDelete: "确认删除",
+        deleting: "删除中…",
+        deleteCompanyTitle: (name: string) => `删除企业 · ${name}`,
+        deleteCompanyDesc: "此操作将永久删除该企业及其资产范围配置，不可撤销。",
+        deleteCompanyAssetsLabel: "同时删除该企业下的所有资产",
+        deleteCompanyAssetsHint: "不勾选则保留资产，仅取消归属关系",
+        deletedAssetsSuccess: (n: number) => `已删除 ${n} 条资产`,
+        deleteFailed: (msg: string) => `删除失败：${msg}`,
+        deletedCompanyAndAssets: (n: number) => `已删除企业，同时删除 ${n} 条资产`,
+        deletedCompanySuccess: "已删除企业",
+      };
+    }
+    return {
+      title: "Assets",
+      totalAssets: (n: number) => `Total of ${n} assets`,
+      deleteSelected: (n: number) => `Delete selected (${n})`,
+      refresh: "Refresh",
+      newCompany: "New Company",
+      companyCols: ["Company", "Assets", "Asset Scope", "Actions"],
+      noScope: "No scope configured",
+      edit: "Edit",
+      append: "Append",
+      deleteCompanyAria: (name: string) => `Delete company ${name}`,
+      emptyCompanies:
+        'No companies yet. Click "New Company" above and configure asset scopes to automatically associate matching assets.',
+      rootDomainCols: ["", "Domain", "ICP Filing", "Company", ""],
+      ipCols: ["", "IP", "C-Segment", "Bound Domains", "Open Ports", ""],
+      subdomainCols: ["", "Domain", "Root Domain", "Record Type", "Record Value", ""],
+      appCols: ["", "App Name", "Bundle ID", "Category", "ICP Filing", ""],
+      serviceCols: ["", "Service", "Domain", "IP", "Port", "Status Code", "Title", "Fingerprints", "Auth", ""],
+      endpointCols: ["", "Method", "Full URL", "Parameters", ""],
+      unassigned: "Unassigned",
+      auth: "Auth",
+      deleteAssetAria: (label: string) => `Delete asset ${label}`,
+      confirmDeleteTitle: "Confirm Deletion",
+      confirmDeleteDesc: (n: number) => `Permanently delete ${n} asset records? This action cannot be undone.`,
+      cancel: "Cancel",
+      confirmDelete: "Confirm Delete",
+      deleting: "Deleting…",
+      deleteCompanyTitle: (name: string) => `Delete Company · ${name}`,
+      deleteCompanyDesc:
+        "This action will permanently remove the company and its scope configuration. It cannot be undone.",
+      deleteCompanyAssetsLabel: "Also delete all assets under this company",
+      deleteCompanyAssetsHint: "If unchecked, assets are retained and only the company binding is removed",
+      deletedAssetsSuccess: (n: number) => `Deleted ${n} asset(s)`,
+      deleteFailed: (msg: string) => `Deletion failed: ${msg}`,
+      deletedCompanyAndAssets: (n: number) => `Company deleted, along with ${n} assets`,
+      deletedCompanySuccess: "Company deleted successfully",
+    };
+  }, [locale]);
 
   // Companies + per-type counts (tab badges) — loaded on demand, no background polling.
   const loadMeta = React.useCallback(() => {
@@ -192,11 +337,11 @@ export default function AssetsPage() {
     setDeleting(true);
     try {
       const res = await api.deleteAssets(deleteIds);
-      toast.success(`已删除 ${res.deleted} 条资产`);
+      toast.success(strings.deletedAssetsSuccess(res.deleted));
       setSelected(new Set());
       refresh();
     } catch (e) {
-      toast.error("删除失败：" + String((e as Error)?.message ?? e));
+      toast.error(strings.deleteFailed(String((e as Error)?.message ?? e)));
     } finally {
       setDeleting(false);
       setDeleteOpen(false);
@@ -208,14 +353,14 @@ export default function AssetsPage() {
     setCompanyDeleting(true);
     try {
       const res = await api.deleteCompany(companyDeleteTarget.id, companyDeleteAssets);
-      const msg =
-        companyDeleteAssets && res.assets_deleted > 0
-          ? `已删除企业，同时删除 ${res.assets_deleted} 条资产`
-          : "已删除企业";
+      let msg = strings.deletedCompanySuccess;
+      if (companyDeleteAssets && res.assets_deleted > 0) {
+        msg = strings.deletedCompanyAndAssets(res.assets_deleted);
+      }
       toast.success(msg);
       refresh();
     } catch (e) {
-      toast.error("删除失败：" + String((e as Error)?.message ?? e));
+      toast.error(strings.deleteFailed(String((e as Error)?.message ?? e)));
     } finally {
       setCompanyDeleting(false);
       setCompanyDeleteTarget(null);
@@ -297,7 +442,6 @@ export default function AssetsPage() {
   const tabCounts: Record<string, number> = { ...counts, company: companies.length };
   const totalAssets = Object.values(counts).reduce((a, b) => a + b, 0);
 
-  // rows are already the current server-side page.
   const tabData = (type: string): Asset[] => (rowsTab === type ? rows : []);
   const currentRows = tabData(tab);
   const slice = <T,>(list: T[]) => list;
@@ -316,19 +460,17 @@ export default function AssetsPage() {
     <div className="flex h-[calc(100vh-6rem)] min-h-0 flex-col gap-4">
       <div className="flex items-center justify-between gap-4">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight">资产</h1>
+          <h1 className="text-xl font-semibold tracking-tight">{strings.title}</h1>
         </div>
         <div className="flex items-center gap-3">
-          <span className="text-sm text-muted-foreground">
-            共 <span className="tabular-nums">{totalAssets}</span> 项资产
-          </span>
+          <span className="text-sm text-muted-foreground">{strings.totalAssets(totalAssets)}</span>
           {selected.size > 0 && (
             <Button variant="destructive" size="sm" onClick={() => openDelete(Array.from(selected) as number[])}>
-              <Trash2Icon className="size-3.5" /> 删除已选 ({selected.size})
+              <Trash2Icon className="size-3.5" /> {strings.deleteSelected(selected.size)}
             </Button>
           )}
           <Button variant="outline" size="sm" onClick={refresh} disabled={loading}>
-            <RefreshCwIcon className={cn("size-4", loading && "animate-spin")} /> 刷新
+            <RefreshCwIcon className={cn("size-4", loading && "animate-spin")} /> {strings.refresh}
           </Button>
           <CompanyDialog onSaved={refresh} />
         </div>
@@ -337,7 +479,7 @@ export default function AssetsPage() {
       <Tabs value={tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col gap-4">
         <div className="overflow-x-auto overflow-y-hidden">
           <TabsList variant="default">
-            {TABS.map((t) => (
+            {tabs.map((t) => (
               <TabsTrigger key={t.key} value={t.key}>
                 <t.icon className="size-3.5" />
                 {t.label}
@@ -347,17 +489,17 @@ export default function AssetsPage() {
           </TabsList>
         </div>
 
-        {/* 企业 */}
+        {/* Company */}
         <TabsContent value="company" className="mt-0 flex min-h-0 flex-1 flex-col">
           <Card className="flex min-h-0 flex-1 flex-col overflow-hidden py-0">
             <div className="min-h-0 flex-1 overflow-auto">
               <Table>
                 <TableHeader className="sticky top-0 z-10 bg-card">
                   <TableRow>
-                    <TableHead>企业</TableHead>
-                    <TableHead className="w-24 text-right">资产数</TableHead>
-                    <TableHead>资产范围</TableHead>
-                    <TableHead className="w-36 text-right">操作</TableHead>
+                    <TableHead>{strings.companyCols[0]}</TableHead>
+                    <TableHead className="w-24 text-right">{strings.companyCols[1]}</TableHead>
+                    <TableHead>{strings.companyCols[2]}</TableHead>
+                    <TableHead className="w-36 text-right">{strings.companyCols[3]}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -380,7 +522,7 @@ export default function AssetsPage() {
                             ))}
                           </div>
                         ) : (
-                          <span className="text-xs text-muted-foreground">未设置范围</span>
+                          <span className="text-xs text-muted-foreground">{strings.noScope}</span>
                         )}
                       </TableCell>
                       <TableCell className="text-right">
@@ -395,7 +537,7 @@ export default function AssetsPage() {
                               setCompanyDeleteTarget(c);
                               setCompanyDeleteAssets(false);
                             }}
-                            aria-label={`删除企业 ${c.name}`}
+                            aria-label={strings.deleteCompanyAria(c.name)}
                           >
                             <Trash2Icon className="size-3.5" />
                           </Button>
@@ -406,7 +548,7 @@ export default function AssetsPage() {
                   {companies.length === 0 && (
                     <TableRow>
                       <TableCell colSpan={4} className="py-10 text-center text-sm text-muted-foreground">
-                        还没有企业。点击右上角「新增企业」并填写资产范围，系统会自动认领命中的资产。
+                        {strings.emptyCompanies}
                       </TableCell>
                     </TableRow>
                   )}
@@ -416,11 +558,11 @@ export default function AssetsPage() {
           </Card>
         </TabsContent>
 
-        {/* 根域名 */}
+        {/* Root Domain */}
         <TabsContent value="root_domain" className="mt-0 flex min-h-0 flex-1 flex-col gap-2">
           {searchBox}
           <AssetCard
-            cols={["", "域名", "ICP 备案", "归属企业", ""]}
+            cols={strings.rootDomainCols}
             loaded={loaded}
             total={total}
             page={page}
@@ -439,7 +581,7 @@ export default function AssetsPage() {
                 <TableCell className="font-mono text-xs font-medium">{a.domain}</TableCell>
                 <TableCell className="text-xs">{a.icp || "—"}</TableCell>
                 <TableCell className="text-xs">
-                  {companyName(a.company_id) || <span className="text-muted-foreground">未归属</span>}
+                  {companyName(a.company_id) || <span className="text-muted-foreground">{strings.unassigned}</span>}
                 </TableCell>
                 <TableCell className="w-8 pl-0">
                   <Button
@@ -447,7 +589,7 @@ export default function AssetsPage() {
                     size="icon"
                     className="size-7 text-muted-foreground hover:text-destructive"
                     onClick={() => openDelete([a.id])}
-                    aria-label={`删除资产 ${a.domain || a.id}`}
+                    aria-label={strings.deleteAssetAria(a.domain || String(a.id))}
                   >
                     <Trash2Icon className="size-3.5" />
                   </Button>
@@ -461,7 +603,7 @@ export default function AssetsPage() {
         <TabsContent value="ip" className="mt-0 flex min-h-0 flex-1 flex-col gap-2">
           {searchBox}
           <AssetCard
-            cols={["", "IP", "C段", "绑定域名", "开放端口", ""]}
+            cols={strings.ipCols}
             loaded={loaded}
             total={total}
             page={page}
@@ -494,7 +636,7 @@ export default function AssetsPage() {
                     size="icon"
                     className="size-7 text-muted-foreground hover:text-destructive"
                     onClick={() => openDelete([a.id])}
-                    aria-label={`删除资产 ${a.ip || a.id}`}
+                    aria-label={strings.deleteAssetAria(a.ip || String(a.id))}
                   >
                     <Trash2Icon className="size-3.5" />
                   </Button>
@@ -504,11 +646,11 @@ export default function AssetsPage() {
           </AssetCard>
         </TabsContent>
 
-        {/* 子域名 */}
+        {/* Subdomain */}
         <TabsContent value="subdomain" className="mt-0 flex min-h-0 flex-1 flex-col gap-2">
           {searchBox}
           <AssetCard
-            cols={["", "域名", "根域名", "解析类型", "解析值", ""]}
+            cols={strings.subdomainCols}
             loaded={loaded}
             total={total}
             page={page}
@@ -536,7 +678,7 @@ export default function AssetsPage() {
                     size="icon"
                     className="size-7 text-muted-foreground hover:text-destructive"
                     onClick={() => openDelete([a.id])}
-                    aria-label={`删除资产 ${a.domain || a.id}`}
+                    aria-label={strings.deleteAssetAria(a.domain || String(a.id))}
                   >
                     <Trash2Icon className="size-3.5" />
                   </Button>
@@ -546,11 +688,11 @@ export default function AssetsPage() {
           </AssetCard>
         </TabsContent>
 
-        {/* 应用 */}
+        {/* App */}
         <TabsContent value="app" className="mt-0 flex min-h-0 flex-1 flex-col gap-2">
           {searchBox}
           <AssetCard
-            cols={["", "应用名", "Bundle ID", "分类", "ICP 备案", ""]}
+            cols={strings.appCols}
             loaded={loaded}
             total={total}
             page={page}
@@ -576,7 +718,7 @@ export default function AssetsPage() {
                     size="icon"
                     className="size-7 text-muted-foreground hover:text-destructive"
                     onClick={() => openDelete([a.id])}
-                    aria-label={`删除资产 ${a.app_name || a.id}`}
+                    aria-label={strings.deleteAssetAria(a.app_name || String(a.id))}
                   >
                     <Trash2Icon className="size-3.5" />
                   </Button>
@@ -586,11 +728,11 @@ export default function AssetsPage() {
           </AssetCard>
         </TabsContent>
 
-        {/* 服务 */}
+        {/* Service */}
         <TabsContent value="service" className="mt-0 flex min-h-0 flex-1 flex-col gap-2">
           {searchBox}
           <AssetCard
-            cols={["", "服务", "域名", "IP", "端口", "状态码", "标题", "指纹", "认证", ""]}
+            cols={strings.serviceCols}
             loaded={loaded}
             total={total}
             page={page}
@@ -655,7 +797,7 @@ export default function AssetsPage() {
                     ) : (
                       (a.auth ?? []).map((authItem, i) => {
                         const item = authItem as Record<string, string>;
-                        const label = item.type || item.username || "认证";
+                        const label = item.type || item.username || strings.auth;
                         return (
                           <span key={i} className="inline-flex items-center gap-1 text-[11px]">
                             <KeyRoundIcon className="size-3 text-muted-foreground" />
@@ -671,7 +813,7 @@ export default function AssetsPage() {
                       size="icon"
                       className="size-7 text-muted-foreground hover:text-destructive"
                       onClick={() => openDelete([a.id])}
-                      aria-label={`删除资产 ${a.url || a.id}`}
+                      aria-label={strings.deleteAssetAria(a.url || String(a.id))}
                     >
                       <Trash2Icon className="size-3.5" />
                     </Button>
@@ -682,11 +824,11 @@ export default function AssetsPage() {
           </AssetCard>
         </TabsContent>
 
-        {/* 接口 */}
+        {/* Endpoint */}
         <TabsContent value="endpoint" className="mt-0 flex min-h-0 flex-1 flex-col gap-2">
           {searchBox}
           <AssetCard
-            cols={["", "方法", "完整地址", "参数", ""]}
+            cols={strings.endpointCols}
             loaded={loaded}
             total={total}
             page={page}
@@ -723,7 +865,7 @@ export default function AssetsPage() {
                     size="icon"
                     className="size-7 text-muted-foreground hover:text-destructive"
                     onClick={() => openDelete([a.id])}
-                    aria-label={`删除资产 ${a.url || a.id}`}
+                    aria-label={strings.deleteAssetAria(a.url || String(a.id))}
                   >
                     <Trash2Icon className="size-3.5" />
                   </Button>
@@ -737,14 +879,11 @@ export default function AssetsPage() {
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>确认删除</AlertDialogTitle>
-            <AlertDialogDescription>
-              将永久删除 <span className="font-semibold tabular-nums">{deleteIds.length}</span>{" "}
-              条资产记录，此操作不可撤销。
-            </AlertDialogDescription>
+            <AlertDialogTitle>{strings.confirmDeleteTitle}</AlertDialogTitle>
+            <AlertDialogDescription>{strings.confirmDeleteDesc(deleteIds.length)}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleting}>取消</AlertDialogCancel>
+            <AlertDialogCancel disabled={deleting}>{strings.cancel}</AlertDialogCancel>
             <AlertDialogAction
               onClick={(e) => {
                 e.preventDefault();
@@ -753,7 +892,7 @@ export default function AssetsPage() {
               disabled={deleting}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {deleting ? "删除中…" : "确认删除"}
+              {deleting ? strings.deleting : strings.confirmDelete}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -770,10 +909,10 @@ export default function AssetsPage() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>删除企业 · {companyDeleteTarget?.name}</AlertDialogTitle>
+            <AlertDialogTitle>{strings.deleteCompanyTitle(companyDeleteTarget?.name ?? "")}</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-3">
-                <p>此操作将永久删除该企业及其资产范围配置，不可撤销。</p>
+                <p>{strings.deleteCompanyDesc}</p>
                 <label
                   htmlFor="delete-assets-opt"
                   className="flex cursor-pointer items-center gap-2.5 rounded-md border p-3 hover:bg-muted/50"
@@ -784,15 +923,15 @@ export default function AssetsPage() {
                     onCheckedChange={(v) => setCompanyDeleteAssets(!!v)}
                   />
                   <span className="text-sm leading-snug">
-                    同时删除该企业下的所有资产
-                    <span className="block text-xs text-muted-foreground">不勾选则保留资产，仅取消归属关系</span>
+                    {strings.deleteCompanyAssetsLabel}
+                    <span className="block text-xs text-muted-foreground">{strings.deleteCompanyAssetsHint}</span>
                   </span>
                 </label>
               </div>
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={companyDeleting}>取消</AlertDialogCancel>
+            <AlertDialogCancel disabled={companyDeleting}>{strings.cancel}</AlertDialogCancel>
             <AlertDialogAction
               onClick={(e) => {
                 e.preventDefault();
@@ -801,7 +940,7 @@ export default function AssetsPage() {
               disabled={companyDeleting}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {companyDeleting ? "删除中…" : "确认删除"}
+              {companyDeleting ? strings.deleting : strings.confirmDelete}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -835,6 +974,7 @@ function AssetCard({
   onToggleAll?: (ids: number[]) => void;
   children: React.ReactNode;
 }) {
+  const { locale } = useI18n();
   const childRows = React.Children.toArray(children);
   const pageCount = Math.max(1, Math.ceil(total / size));
   const start = total === 0 ? 0 : page * size + 1;
@@ -843,6 +983,28 @@ function AssetCard({
   const pageIds = dataRows?.map((r) => r.id) ?? [];
   const allSelected = pageIds.length > 0 && selected != null && pageIds.every((id) => selected.has(id));
   const someSelected = selected != null && pageIds.some((id) => selected.has(id));
+
+  const strings = React.useMemo(() => {
+    if (locale === "pt") {
+      return {
+        noData: "Sem registros.",
+        loading: "Carregando…",
+        perPage: "/ página",
+      };
+    }
+    if (locale === "zh") {
+      return {
+        noData: "暂无数据。",
+        loading: "加载中…",
+        perPage: "/ 页",
+      };
+    }
+    return {
+      noData: "No records found.",
+      loading: "Loading…",
+      perPage: "/ page",
+    };
+  }, [locale]);
 
   return (
     <Card className="flex min-h-0 flex-1 flex-col overflow-hidden py-0">
@@ -870,7 +1032,7 @@ function AssetCard({
             ) : (
               <TableRow>
                 <TableCell colSpan={cols.length} className="py-12 text-center text-sm text-muted-foreground">
-                  {loaded ? "暂无数据。" : "加载中…"}
+                  {loaded ? strings.noData : strings.loading}
                 </TableCell>
               </TableRow>
             )}
@@ -887,7 +1049,7 @@ function AssetCard({
               <SelectGroup>
                 {PAGE_SIZES.map((n) => (
                   <SelectItem key={n} value={String(n)}>
-                    {n} / 页
+                    {n} {strings.perPage}
                   </SelectItem>
                 ))}
               </SelectGroup>
@@ -951,8 +1113,6 @@ function CompanyAvatar({ name, logo }: { name: string; logo?: string }) {
   );
 }
 
-// 后端返回的 warnings 说的是既有数据问题（不是本次提交的行有错），保存本身已经
-// 成功。给更长的停留时间，因为它需要用户去处理具体的资产，扫一眼标题不够。
 function showScopeWarnings(warnings?: string[]) {
   for (const warning of warnings ?? []) {
     toast.warning(warning, { duration: 15000 });
@@ -971,13 +1131,72 @@ function savedScopeText(company: Company): string {
     .join("\n");
 }
 
-// 新增企业使用与任务、LLM 编辑一致的右侧抽屉。
 function CompanyDialog({ onSaved }: { onSaved: () => void }) {
+  const { locale } = useI18n();
   const [open, setOpen] = React.useState(false);
   const [name, setName] = React.useState("");
   const [scopeText, setScopeText] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const parsedScope = React.useMemo(() => parseCompanyScopeText(scopeText), [scopeText]);
+
+  const strings = React.useMemo(() => {
+    if (locale === "pt") {
+      return {
+        buttonLabel: "Nova Empresa",
+        title: "Nova Empresa",
+        description:
+          "Configure a empresa e seu escopo de ativos. Palavras-chave servem apenas como instrução para o Agent e não associam ativos automaticamente.",
+        nameLabel: "Nome da Empresa",
+        namePlaceholder: "ex.: Acme Corp (nome exclusivo)",
+        nameRequired: "Informe o nome da empresa",
+        scopeInvalid: "Corrija os erros no escopo de ativos",
+        createdWithInvalid: (added: number, invalid: number) =>
+          `Empresa criada. Adicionadas ${added} regras; ${invalid} linhas inválidas`,
+        createdSuccess: (added: number) => `Empresa criada. Adicionadas ${added} regras`,
+        companyExists: "Empresa já cadastrada. Escolha outro nome.",
+        saveFailed: (msg: string) => `Falha ao salvar: ${msg}`,
+        cancel: "Cancelar",
+        save: "Salvar",
+        saving: "Salvando…",
+      };
+    }
+    if (locale === "zh") {
+      return {
+        buttonLabel: "新增企业",
+        title: "新增企业",
+        description: "配置企业及其资产范围。关键词只作为 Agent 提示，不会自动归属资产。",
+        nameLabel: "企业名称",
+        namePlaceholder: "如 Acme Corp（名称唯一）",
+        nameRequired: "请填写企业名称",
+        scopeInvalid: "请修正无效的资产范围",
+        createdWithInvalid: (added: number, invalid: number) => `已创建企业，添加 ${added} 条范围；${invalid} 行无效`,
+        createdSuccess: (added: number) => `已创建企业，添加 ${added} 条范围`,
+        companyExists: "企业已存在，请换个名称",
+        saveFailed: (msg: string) => `保存失败：${msg}`,
+        cancel: "取消",
+        save: "保存",
+        saving: "保存中…",
+      };
+    }
+    return {
+      buttonLabel: "New Company",
+      title: "New Company",
+      description:
+        "Configure the company and its asset scope. Keywords serve as hints for the Agent and do not automatically claim assets.",
+      nameLabel: "Company Name",
+      namePlaceholder: "e.g. Acme Corp (must be unique)",
+      nameRequired: "Please enter the company name",
+      scopeInvalid: "Please fix invalid asset scope rules",
+      createdWithInvalid: (added: number, invalid: number) =>
+        `Company created. Added ${added} scope rules; ${invalid} lines invalid`,
+      createdSuccess: (added: number) => `Company created. Added ${added} scope rules`,
+      companyExists: "Company already exists, please use a different name",
+      saveFailed: (msg: string) => `Save failed: ${msg}`,
+      cancel: "Cancel",
+      save: "Save",
+      saving: "Saving…",
+    };
+  }, [locale]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -987,11 +1206,11 @@ function CompanyDialog({ onSaved }: { onSaved: () => void }) {
 
   const submit = async () => {
     if (!name.trim()) {
-      toast.error("请填写企业名称");
+      toast.error(strings.nameRequired);
       return;
     }
     if (parsedScope.errors.length > 0) {
-      toast.error("请修正无效的资产范围");
+      toast.error(strings.scopeInvalid);
       return;
     }
     setBusy(true);
@@ -999,14 +1218,14 @@ function CompanyDialog({ onSaved }: { onSaved: () => void }) {
       const res = await api.createCompany(name.trim(), parsedScope.rules);
       const added = res.scope_added ?? 0;
       const invalid = res.scope_invalid ?? 0;
-      if (invalid > 0) toast.warning(`已创建企业，添加 ${added} 条范围；${invalid} 行无效`);
-      else toast.success(`已创建企业，添加 ${added} 条范围`);
+      if (invalid > 0) toast.warning(strings.createdWithInvalid(added, invalid));
+      else toast.success(strings.createdSuccess(added));
       setOpen(false);
       onSaved();
     } catch (e) {
       const msg = String((e as Error)?.message ?? e);
-      if (/:\s*409$/.test(msg)) toast.error("企业已存在，请换个名称");
-      else toast.error(`保存失败：${msg}`);
+      if (/:\s*409$/.test(msg)) toast.error(strings.companyExists);
+      else toast.error(strings.saveFailed(msg));
     } finally {
       setBusy(false);
     }
@@ -1016,21 +1235,21 @@ function CompanyDialog({ onSaved }: { onSaved: () => void }) {
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
         <Button size="sm">
-          <BuildingIcon data-icon="inline-start" /> 新增企业
+          <BuildingIcon data-icon="inline-start" /> {strings.buttonLabel}
         </Button>
       </SheetTrigger>
       <SheetContent className="w-full! max-w-none! gap-0 p-0 sm:w-[520px]! sm:max-w-[520px]!">
         <SheetHeader className="border-b p-6">
-          <SheetTitle>新增企业</SheetTitle>
-          <SheetDescription>配置企业及其资产范围。关键词只作为 Agent 提示，不会自动归属资产。</SheetDescription>
+          <SheetTitle>{strings.title}</SheetTitle>
+          <SheetDescription>{strings.description}</SheetDescription>
         </SheetHeader>
         <div className="flex-1 overflow-y-auto p-6">
           <FieldGroup>
             <Field>
-              <FieldLabel htmlFor="cn-name">企业名称</FieldLabel>
+              <FieldLabel htmlFor="cn-name">{strings.nameLabel}</FieldLabel>
               <Input
                 id="cn-name"
-                placeholder="如 Acme Corp（名称唯一）"
+                placeholder={strings.namePlaceholder}
                 value={name}
                 onChange={(e) => setName(e.target.value)}
               />
@@ -1040,10 +1259,10 @@ function CompanyDialog({ onSaved }: { onSaved: () => void }) {
         </div>
         <SheetFooter className="flex-row justify-end gap-2 border-t p-4">
           <Button variant="outline" onClick={() => setOpen(false)} disabled={busy}>
-            取消
+            {strings.cancel}
           </Button>
           <Button onClick={submit} disabled={busy || !name.trim() || parsedScope.errors.length > 0}>
-            {busy ? "保存中…" : "保存"}
+            {busy ? strings.saving : strings.save}
           </Button>
         </SheetFooter>
       </SheetContent>
@@ -1051,8 +1270,8 @@ function CompanyDialog({ onSaved }: { onSaved: () => void }) {
   );
 }
 
-// 编辑（覆盖）资产范围弹窗
 function EditScopeDialog({ company, onSaved }: { company: Company; onSaved: () => void }) {
+  const { locale } = useI18n();
   const [open, setOpen] = React.useState(false);
   const [scopeText, setScopeText] = React.useState("");
   const [reason, setReason] = React.useState("");
@@ -1063,6 +1282,57 @@ function EditScopeDialog({ company, onSaved }: { company: Company; onSaved: () =
     [preservedScopeRules, scopeText],
   );
 
+  const strings = React.useMemo(() => {
+    if (locale === "pt") {
+      return {
+        buttonLabel: "Editar",
+        title: `Editar Escopo de Ativos · ${company.name}`,
+        description:
+          "A edição substituirá todo o escopo existente. Registros ICP realizam correspondência exata, enquanto palavras-chave servem de orientação aos agentes.",
+        reasonLabel: "Critério de Atribuição (opcional)",
+        reasonPlaceholder: "ex.: certificado SSL / WHOIS / evidência ASN",
+        scopeInvalid: "Corrija os erros no escopo de ativos",
+        savedWithInvalid: (invalid: number) => `Salvo; ${invalid} linhas inválidas`,
+        updatedSuccess: (added: number) => `Escopo atualizado, total de ${added} regras`,
+        saveFailed: (msg: string) => `Falha ao salvar: ${msg}`,
+        cancel: "Cancelar",
+        overwriteSave: "Substituir e Salvar",
+        saving: "Salvando…",
+      };
+    }
+    if (locale === "zh") {
+      return {
+        buttonLabel: "编辑",
+        title: `编辑资产范围 · ${company.name}`,
+        description: "编辑后将替换全部现有范围。ICP 精确匹配资产，企业关键词仅作为 Agent 提示。",
+        reasonLabel: "归属依据（可选）",
+        reasonPlaceholder: "如 证书 / whois / ASN 佐证",
+        scopeInvalid: "请修正无效的资产范围",
+        savedWithInvalid: (invalid: number) => `已保存；${invalid} 行无效`,
+        updatedSuccess: (added: number) => `范围已更新，共 ${added} 条`,
+        saveFailed: (msg: string) => `保存失败：${msg}`,
+        cancel: "取消",
+        overwriteSave: "覆盖保存",
+        saving: "保存中…",
+      };
+    }
+    return {
+      buttonLabel: "Edit",
+      title: `Edit Asset Scope · ${company.name}`,
+      description:
+        "Editing replaces all existing scopes. ICP matches assets accurately, while keywords serve as Agent hints.",
+      reasonLabel: "Attribution Basis (optional)",
+      reasonPlaceholder: "e.g. certificate / whois / ASN evidence",
+      scopeInvalid: "Please fix invalid asset scope rules",
+      savedWithInvalid: (invalid: number) => `Saved; ${invalid} lines invalid`,
+      updatedSuccess: (added: number) => `Scope updated, total of ${added} rules`,
+      saveFailed: (msg: string) => `Save failed: ${msg}`,
+      cancel: "Cancel",
+      overwriteSave: "Overwrite & Save",
+      saving: "Saving…",
+    };
+  }, [locale, company.name]);
+
   React.useEffect(() => {
     if (!open) return;
     setScopeText(savedScopeText(company));
@@ -1071,20 +1341,20 @@ function EditScopeDialog({ company, onSaved }: { company: Company; onSaved: () =
 
   const submit = async () => {
     if (parsedScope.errors.length > 0) {
-      toast.error("请修正无效的资产范围");
+      toast.error(strings.scopeInvalid);
       return;
     }
     setBusy(true);
     try {
       const res = await api.updateCompanyScope(company.id, parsedScope.rules, reason);
       const errCount = res.invalid ?? 0;
-      if (errCount > 0) toast.warning(`已保存；${errCount} 行无效`);
-      else toast.success(`范围已更新，共 ${res.added} 条`);
+      if (errCount > 0) toast.warning(strings.savedWithInvalid(errCount));
+      else toast.success(strings.updatedSuccess(res.added));
       showScopeWarnings(res.warnings);
       setOpen(false);
       onSaved();
     } catch (e) {
-      toast.error(`保存失败：${String((e as Error)?.message ?? e)}`);
+      toast.error(strings.saveFailed(String((e as Error)?.message ?? e)));
     } finally {
       setBusy(false);
     }
@@ -1094,15 +1364,13 @@ function EditScopeDialog({ company, onSaved }: { company: Company; onSaved: () =
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button variant="outline" size="sm" className="h-7">
-          编辑
+          {strings.buttonLabel}
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>编辑资产范围 · {company.name}</DialogTitle>
-          <DialogDescription>
-            编辑后将替换全部现有范围。ICP 精确匹配资产，企业关键词仅作为 Agent 提示。
-          </DialogDescription>
+          <DialogTitle>{strings.title}</DialogTitle>
+          <DialogDescription>{strings.description}</DialogDescription>
         </DialogHeader>
         <FieldGroup className="py-2">
           <ScopeTextEditor
@@ -1112,10 +1380,10 @@ function EditScopeDialog({ company, onSaved }: { company: Company; onSaved: () =
             parsed={parsedScope}
           />
           <Field>
-            <FieldLabel htmlFor="es-reason">归属依据（可选）</FieldLabel>
+            <FieldLabel htmlFor="es-reason">{strings.reasonLabel}</FieldLabel>
             <Input
               id="es-reason"
-              placeholder="如 证书 / whois / ASN 佐证"
+              placeholder={strings.reasonPlaceholder}
               value={reason}
               onChange={(e) => setReason(e.target.value)}
             />
@@ -1123,10 +1391,10 @@ function EditScopeDialog({ company, onSaved }: { company: Company; onSaved: () =
         </FieldGroup>
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)} disabled={busy}>
-            取消
+            {strings.cancel}
           </Button>
           <Button onClick={submit} disabled={busy || parsedScope.errors.length > 0}>
-            {busy ? "保存中…" : "覆盖保存"}
+            {busy ? strings.saving : strings.overwriteSave}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1134,13 +1402,67 @@ function EditScopeDialog({ company, onSaved }: { company: Company; onSaved: () =
   );
 }
 
-// 追加资产范围弹窗
 function AppendScopeDialog({ company, onSaved }: { company: Company; onSaved: () => void }) {
+  const { locale } = useI18n();
   const [open, setOpen] = React.useState(false);
   const [scopeText, setScopeText] = React.useState("");
   const [reason, setReason] = React.useState("");
   const [busy, setBusy] = React.useState(false);
   const parsedScope = React.useMemo(() => parseCompanyScopeText(scopeText), [scopeText]);
+
+  const strings = React.useMemo(() => {
+    if (locale === "pt") {
+      return {
+        buttonLabel: "Adicionar",
+        title: `Adicionar ao Escopo de Ativos · ${company.name}`,
+        description:
+          "As novas regras serão anexadas ao escopo existente. Registros ICP realizam correspondência exata, enquanto palavras-chave orientam o Agent.",
+        reasonLabel: "Critério de Atribuição (opcional)",
+        reasonPlaceholder: "ex.: certificado SSL / WHOIS / evidência ASN",
+        emptyScopeError: "Informe as regras de escopo a adicionar",
+        scopeInvalid: "Corrija os erros no escopo de ativos",
+        savedWithInvalid: (invalid: number) => `Salvo; ${invalid} linhas inválidas`,
+        appendedSuccess: (added: number) => `Adicionadas ${added} regras ao escopo`,
+        saveFailed: (msg: string) => `Falha ao salvar: ${msg}`,
+        cancel: "Cancelar",
+        append: "Adicionar",
+        saving: "Salvando…",
+      };
+    }
+    if (locale === "zh") {
+      return {
+        buttonLabel: "追加",
+        title: `追加资产范围 · ${company.name}`,
+        description: "新范围会追加到现有范围。ICP 精确匹配资产，企业关键词仅作为 Agent 提示。",
+        reasonLabel: "归属依据（可选）",
+        reasonPlaceholder: "如 证书 / whois / ASN 佐证",
+        emptyScopeError: "请填写要追加的范围",
+        scopeInvalid: "请修正无效的资产范围",
+        savedWithInvalid: (invalid: number) => `已保存；${invalid} 行无效`,
+        appendedSuccess: (added: number) => `已追加 ${added} 条范围`,
+        saveFailed: (msg: string) => `保存失败：${msg}`,
+        cancel: "取消",
+        append: "追加",
+        saving: "保存中…",
+      };
+    }
+    return {
+      buttonLabel: "Append",
+      title: `Append Asset Scope · ${company.name}`,
+      description:
+        "New rules will be appended to the existing scope. ICP matches assets accurately, while keywords provide Agent hints.",
+      reasonLabel: "Attribution Basis (optional)",
+      reasonPlaceholder: "e.g. certificate / whois / ASN evidence",
+      emptyScopeError: "Please enter the scope rules to append",
+      scopeInvalid: "Please fix invalid asset scope rules",
+      savedWithInvalid: (invalid: number) => `Saved; ${invalid} lines invalid`,
+      appendedSuccess: (added: number) => `Appended ${added} scope rules`,
+      saveFailed: (msg: string) => `Save failed: ${msg}`,
+      cancel: "Cancel",
+      append: "Append",
+      saving: "Saving…",
+    };
+  }, [locale, company.name]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -1150,24 +1472,24 @@ function AppendScopeDialog({ company, onSaved }: { company: Company; onSaved: ()
 
   const submit = async () => {
     if (parsedScope.rules.length === 0) {
-      toast.error("请填写要追加的范围");
+      toast.error(strings.emptyScopeError);
       return;
     }
     if (parsedScope.errors.length > 0) {
-      toast.error("请修正无效的资产范围");
+      toast.error(strings.scopeInvalid);
       return;
     }
     setBusy(true);
     try {
       const res = await api.addCompanyScope(company.id, parsedScope.rules, reason);
       const errCount = res.invalid ?? 0;
-      if (errCount > 0) toast.warning(`已保存；${errCount} 行无效`);
-      else toast.success(`已追加 ${res.added} 条范围`);
+      if (errCount > 0) toast.warning(strings.savedWithInvalid(errCount));
+      else toast.success(strings.appendedSuccess(res.added));
       showScopeWarnings(res.warnings);
       setOpen(false);
       onSaved();
     } catch (e) {
-      toast.error(`保存失败：${String((e as Error)?.message ?? e)}`);
+      toast.error(strings.saveFailed(String((e as Error)?.message ?? e)));
     } finally {
       setBusy(false);
     }
@@ -1177,13 +1499,13 @@ function AppendScopeDialog({ company, onSaved }: { company: Company; onSaved: ()
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button variant="outline" size="sm" className="h-7">
-          追加
+          {strings.buttonLabel}
         </Button>
       </DialogTrigger>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>追加资产范围 · {company.name}</DialogTitle>
-          <DialogDescription>新范围会追加到现有范围。ICP 精确匹配资产，企业关键词仅作为 Agent 提示。</DialogDescription>
+          <DialogTitle>{strings.title}</DialogTitle>
+          <DialogDescription>{strings.description}</DialogDescription>
         </DialogHeader>
         <FieldGroup className="py-2">
           <ScopeTextEditor
@@ -1193,10 +1515,10 @@ function AppendScopeDialog({ company, onSaved }: { company: Company; onSaved: ()
             parsed={parsedScope}
           />
           <Field>
-            <FieldLabel htmlFor="as-reason">归属依据（可选）</FieldLabel>
+            <FieldLabel htmlFor="as-reason">{strings.reasonLabel}</FieldLabel>
             <Input
               id="as-reason"
-              placeholder="如 证书 / whois / ASN 佐证"
+              placeholder={strings.reasonPlaceholder}
               value={reason}
               onChange={(e) => setReason(e.target.value)}
             />
@@ -1204,10 +1526,10 @@ function AppendScopeDialog({ company, onSaved }: { company: Company; onSaved: ()
         </FieldGroup>
         <DialogFooter>
           <Button variant="outline" onClick={() => setOpen(false)} disabled={busy}>
-            取消
+            {strings.cancel}
           </Button>
           <Button onClick={submit} disabled={busy || parsedScope.rules.length === 0 || parsedScope.errors.length > 0}>
-            {busy ? "保存中…" : "追加"}
+            {busy ? strings.saving : strings.append}
           </Button>
         </DialogFooter>
       </DialogContent>

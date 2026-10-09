@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem, useSidebar } from "@/components/ui/sidebar";
 import { auth } from "@/lib/auth";
+import { useI18n } from "@/lib/i18n/i18n-context";
 import { getInitials } from "@/lib/utils";
 
 import { ChangePasswordDialog } from "./change-password-dialog";
@@ -30,11 +31,10 @@ export function NavUser({
 }) {
   const { isMobile } = useSidebar();
   const [pwOpen, setPwOpen] = React.useState(false);
+  const { d } = useI18n();
 
   function handleLogout() {
     auth.clearToken();
-    // 硬跳转：让浏览器用已清除的 cookie 发起全新请求，
-    // middleware 才能正确读到空 token 并放行 /login
     window.location.href = "/login";
   }
 
@@ -79,12 +79,12 @@ export function NavUser({
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={() => setPwOpen(true)}>
               <KeyRound />
-              修改密码
+              {d.header.changePassword}
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">
               <LogOut />
-              退出登录
+              {d.header.logout}
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>

@@ -5,177 +5,551 @@ import * as React from "react";
 import { SearchIcon } from "lucide-react";
 
 import { Input } from "@/components/ui/input";
+import { useI18n } from "@/lib/i18n/i18n-context";
 import { cn } from "@/lib/utils";
 
 // ── DSL autocomplete ──────────────────────────────────────────────────────────
-// Shared by the global asset view (/function/assets) and the per-task 测试资产
+// Shared by the global asset view (/function/assets) and the per-task asset
 // search, so both search boxes behave and look identical.
 
-const DSL_FIELDS: { name: string; desc: string; ops: { op: string; desc: string }[] }[] = [
-  {
-    name: "domain",
-    desc: "域名（根域名/子域名/服务域名）",
-    ops: [
-      { op: "=", desc: "模糊匹配" },
-      { op: "==", desc: "精确匹配" },
-      { op: "!=", desc: "排除" },
-    ],
-  },
-  {
-    name: "ip",
-    desc: "IPv4/IPv6 地址",
-    ops: [
-      { op: "=", desc: "模糊匹配" },
-      { op: "==", desc: "精确匹配" },
-      { op: "!=", desc: "排除" },
-    ],
-  },
-  {
-    name: "url",
-    desc: "完整 URL（服务/接口）",
-    ops: [
-      { op: "=", desc: "模糊匹配" },
-      { op: "==", desc: "精确匹配" },
-      { op: "!=", desc: "排除" },
-    ],
-  },
-  {
-    name: "root_domain",
-    desc: "根域名",
-    ops: [
-      { op: "=", desc: "模糊匹配" },
-      { op: "==", desc: "精确匹配" },
-      { op: "!=", desc: "排除" },
-    ],
-  },
-  {
-    name: "page_title",
-    desc: "页面标题（HTTP 服务）",
-    ops: [
-      { op: "=", desc: "模糊匹配" },
-      { op: "==", desc: "精确匹配" },
-      { op: "!=", desc: "排除" },
-    ],
-  },
-  {
-    name: "icp",
-    desc: "ICP 备案号",
-    ops: [
-      { op: "=", desc: "模糊匹配" },
-      { op: "==", desc: "精确匹配" },
-      { op: "!=", desc: "排除" },
-    ],
-  },
-  {
-    name: "service_name",
-    desc: "服务名称（非 HTTP 服务）",
-    ops: [
-      { op: "=", desc: "模糊匹配" },
-      { op: "==", desc: "精确匹配" },
-      { op: "!=", desc: "排除" },
-    ],
-  },
-  {
-    name: "app_name",
-    desc: "应用名称",
-    ops: [
-      { op: "=", desc: "模糊匹配" },
-      { op: "==", desc: "精确匹配" },
-      { op: "!=", desc: "排除" },
-    ],
-  },
-  {
-    name: "bundle_id",
-    desc: "应用 Bundle ID",
-    ops: [
-      { op: "=", desc: "模糊匹配" },
-      { op: "==", desc: "精确匹配" },
-      { op: "!=", desc: "排除" },
-    ],
-  },
-  {
-    name: "category",
-    desc: "应用分类",
-    ops: [
-      { op: "=", desc: "模糊匹配" },
-      { op: "==", desc: "精确匹配" },
-      { op: "!=", desc: "排除" },
-    ],
-  },
-  {
-    name: "app_icp",
-    desc: "应用 ICP 备案",
-    ops: [
-      { op: "=", desc: "模糊匹配" },
-      { op: "==", desc: "精确匹配" },
-      { op: "!=", desc: "排除" },
-    ],
-  },
-  {
-    name: "method",
-    desc: "HTTP 方法 GET/POST/PUT/…",
-    ops: [
-      { op: "==", desc: "精确匹配" },
-      { op: "!=", desc: "排除" },
-    ],
-  },
-  {
-    name: "service_type",
-    desc: "服务类型：http | other",
-    ops: [
-      { op: "==", desc: "精确匹配" },
-      { op: "!=", desc: "排除" },
-    ],
-  },
-  {
-    name: "record_type",
-    desc: "DNS 解析类型 A/CNAME/MX/…",
-    ops: [
-      { op: "==", desc: "精确匹配" },
-      { op: "!=", desc: "排除" },
-    ],
-  },
-  {
-    name: "technology",
-    desc: "技术指纹（数组字段）",
-    ops: [
-      { op: "=", desc: "模糊匹配" },
-      { op: "==", desc: "精确匹配" },
-      { op: "!=", desc: "排除" },
-    ],
-  },
-  {
-    name: "port",
-    desc: "端口号（整数）",
-    ops: [
-      { op: "==", desc: "等于" },
-      { op: "!=", desc: "不等于" },
-      { op: ">", desc: "大于" },
-      { op: ">=", desc: "大于等于" },
-      { op: "<", desc: "小于" },
-      { op: "<=", desc: "小于等于" },
-    ],
-  },
-  {
-    name: "status_code",
-    desc: "HTTP 状态码（整数）",
-    ops: [
-      { op: "==", desc: "等于" },
-      { op: "!=", desc: "不等于" },
-      { op: ">", desc: "大于" },
-      { op: ">=", desc: "大于等于" },
-      { op: "<", desc: "小于" },
-      { op: "<=", desc: "小于等于" },
-    ],
-  },
-  { name: "company_id", desc: "归属企业 ID（整数）", ops: [{ op: "==", desc: "等于" }] },
-  { name: "task_id", desc: "来源任务 ID（整数）", ops: [{ op: "==", desc: "等于" }] },
-];
+interface DslOp {
+  op: string;
+  desc: string;
+}
 
-const LOGIC_OPS = [
-  { label: "AND", desc: "且（两个条件都满足）" },
-  { label: "OR", desc: "或（满足其中之一）" },
-];
+interface DslFieldDef {
+  name: string;
+  desc: string;
+  ops: DslOp[];
+}
+
+function getDslFields(locale: string): DslFieldDef[] {
+  if (locale === "pt") {
+    const fuzzy = "Correspondência parcial";
+    const exact = "Correspondência exata";
+    const exclude = "Excluir";
+    const eq = "Igual";
+    const neq = "Diferente";
+    const gt = "Maior que";
+    const gte = "Maior ou igual";
+    const lt = "Menor que";
+    const lte = "Menor ou igual";
+
+    return [
+      {
+        name: "domain",
+        desc: "Domínio (raiz/subdomínio/serviço)",
+        ops: [
+          { op: "=", desc: fuzzy },
+          { op: "==", desc: exact },
+          { op: "!=", desc: exclude },
+        ],
+      },
+      {
+        name: "ip",
+        desc: "Endereço IPv4/IPv6",
+        ops: [
+          { op: "=", desc: fuzzy },
+          { op: "==", desc: exact },
+          { op: "!=", desc: exclude },
+        ],
+      },
+      {
+        name: "url",
+        desc: "URL Completa (serviço/endpoint)",
+        ops: [
+          { op: "=", desc: fuzzy },
+          { op: "==", desc: exact },
+          { op: "!=", desc: exclude },
+        ],
+      },
+      {
+        name: "root_domain",
+        desc: "Domínio Raiz",
+        ops: [
+          { op: "=", desc: fuzzy },
+          { op: "==", desc: exact },
+          { op: "!=", desc: exclude },
+        ],
+      },
+      {
+        name: "page_title",
+        desc: "Título da Página (serviço HTTP)",
+        ops: [
+          { op: "=", desc: fuzzy },
+          { op: "==", desc: exact },
+          { op: "!=", desc: exclude },
+        ],
+      },
+      {
+        name: "icp",
+        desc: "Registro ICP",
+        ops: [
+          { op: "=", desc: fuzzy },
+          { op: "==", desc: exact },
+          { op: "!=", desc: exclude },
+        ],
+      },
+      {
+        name: "service_name",
+        desc: "Nome do Serviço (não-HTTP)",
+        ops: [
+          { op: "=", desc: fuzzy },
+          { op: "==", desc: exact },
+          { op: "!=", desc: exclude },
+        ],
+      },
+      {
+        name: "app_name",
+        desc: "Nome da Aplicação",
+        ops: [
+          { op: "=", desc: fuzzy },
+          { op: "==", desc: exact },
+          { op: "!=", desc: exclude },
+        ],
+      },
+      {
+        name: "bundle_id",
+        desc: "Bundle ID do App",
+        ops: [
+          { op: "=", desc: fuzzy },
+          { op: "==", desc: exact },
+          { op: "!=", desc: exclude },
+        ],
+      },
+      {
+        name: "category",
+        desc: "Categoria do App",
+        ops: [
+          { op: "=", desc: fuzzy },
+          { op: "==", desc: exact },
+          { op: "!=", desc: exclude },
+        ],
+      },
+      {
+        name: "app_icp",
+        desc: "Registro ICP do App",
+        ops: [
+          { op: "=", desc: fuzzy },
+          { op: "==", desc: exact },
+          { op: "!=", desc: exclude },
+        ],
+      },
+      {
+        name: "method",
+        desc: "Método HTTP (GET/POST/PUT/…)",
+        ops: [
+          { op: "==", desc: exact },
+          { op: "!=", desc: exclude },
+        ],
+      },
+      {
+        name: "service_type",
+        desc: "Tipo de Serviço: http | other",
+        ops: [
+          { op: "==", desc: exact },
+          { op: "!=", desc: exclude },
+        ],
+      },
+      {
+        name: "record_type",
+        desc: "Tipo de Registro DNS (A/CNAME/MX/…)",
+        ops: [
+          { op: "==", desc: exact },
+          { op: "!=", desc: exclude },
+        ],
+      },
+      {
+        name: "technology",
+        desc: "Fingerprint Tecnológico (array)",
+        ops: [
+          { op: "=", desc: fuzzy },
+          { op: "==", desc: exact },
+          { op: "!=", desc: exclude },
+        ],
+      },
+      {
+        name: "port",
+        desc: "Número da Porta (inteiro)",
+        ops: [
+          { op: "==", desc: eq },
+          { op: "!=", desc: neq },
+          { op: ">", desc: gt },
+          { op: ">=", desc: gte },
+          { op: "<", desc: lt },
+          { op: "<=", desc: lte },
+        ],
+      },
+      {
+        name: "status_code",
+        desc: "Código de Status HTTP (inteiro)",
+        ops: [
+          { op: "==", desc: eq },
+          { op: "!=", desc: neq },
+          { op: ">", desc: gt },
+          { op: ">=", desc: gte },
+          { op: "<", desc: lt },
+          { op: "<=", desc: lte },
+        ],
+      },
+      { name: "company_id", desc: "ID da Empresa (inteiro)", ops: [{ op: "==", desc: eq }] },
+      { name: "task_id", desc: "ID da Tarefa de Origem (inteiro)", ops: [{ op: "==", desc: eq }] },
+    ];
+  }
+
+  if (locale === "zh") {
+    return [
+      {
+        name: "domain",
+        desc: "域名（根域名/子域名/服务域名）",
+        ops: [
+          { op: "=", desc: "模糊匹配" },
+          { op: "==", desc: "精确匹配" },
+          { op: "!=", desc: "排除" },
+        ],
+      },
+      {
+        name: "ip",
+        desc: "IPv4/IPv6 地址",
+        ops: [
+          { op: "=", desc: "模糊匹配" },
+          { op: "==", desc: "精确匹配" },
+          { op: "!=", desc: "排除" },
+        ],
+      },
+      {
+        name: "url",
+        desc: "完整 URL（服务/接口）",
+        ops: [
+          { op: "=", desc: "模糊匹配" },
+          { op: "==", desc: "精确匹配" },
+          { op: "!=", desc: "排除" },
+        ],
+      },
+      {
+        name: "root_domain",
+        desc: "根域名",
+        ops: [
+          { op: "=", desc: "模糊匹配" },
+          { op: "==", desc: "精确匹配" },
+          { op: "!=", desc: "排除" },
+        ],
+      },
+      {
+        name: "page_title",
+        desc: "页面标题（HTTP 服务）",
+        ops: [
+          { op: "=", desc: "模糊匹配" },
+          { op: "==", desc: "精确匹配" },
+          { op: "!=", desc: "排除" },
+        ],
+      },
+      {
+        name: "icp",
+        desc: "ICP 备案号",
+        ops: [
+          { op: "=", desc: "模糊匹配" },
+          { op: "==", desc: "精确匹配" },
+          { op: "!=", desc: "排除" },
+        ],
+      },
+      {
+        name: "service_name",
+        desc: "服务名称（非 HTTP 服务）",
+        ops: [
+          { op: "=", desc: "模糊匹配" },
+          { op: "==", desc: "精确匹配" },
+          { op: "!=", desc: "排除" },
+        ],
+      },
+      {
+        name: "app_name",
+        desc: "应用名称",
+        ops: [
+          { op: "=", desc: "模糊匹配" },
+          { op: "==", desc: "精确匹配" },
+          { op: "!=", desc: "排除" },
+        ],
+      },
+      {
+        name: "bundle_id",
+        desc: "应用 Bundle ID",
+        ops: [
+          { op: "=", desc: "模糊匹配" },
+          { op: "==", desc: "精确匹配" },
+          { op: "!=", desc: "排除" },
+        ],
+      },
+      {
+        name: "category",
+        desc: "应用分类",
+        ops: [
+          { op: "=", desc: "模糊匹配" },
+          { op: "==", desc: "精确匹配" },
+          { op: "!=", desc: "排除" },
+        ],
+      },
+      {
+        name: "app_icp",
+        desc: "应用 ICP 备案",
+        ops: [
+          { op: "=", desc: "模糊匹配" },
+          { op: "==", desc: "精确匹配" },
+          { op: "!=", desc: "排除" },
+        ],
+      },
+      {
+        name: "method",
+        desc: "HTTP 方法 GET/POST/PUT/…",
+        ops: [
+          { op: "==", desc: "精确匹配" },
+          { op: "!=", desc: "排除" },
+        ],
+      },
+      {
+        name: "service_type",
+        desc: "服务类型：http | other",
+        ops: [
+          { op: "==", desc: "精确匹配" },
+          { op: "!=", desc: "排除" },
+        ],
+      },
+      {
+        name: "record_type",
+        desc: "DNS 解析类型 A/CNAME/MX/…",
+        ops: [
+          { op: "==", desc: "精确匹配" },
+          { op: "!=", desc: "排除" },
+        ],
+      },
+      {
+        name: "technology",
+        desc: "技术指纹（数组字段）",
+        ops: [
+          { op: "=", desc: "模糊匹配" },
+          { op: "==", desc: "精确匹配" },
+          { op: "!=", desc: "排除" },
+        ],
+      },
+      {
+        name: "port",
+        desc: "端口号（整数）",
+        ops: [
+          { op: "==", desc: "等于" },
+          { op: "!=", desc: "不等于" },
+          { op: ">", desc: "大于" },
+          { op: ">=", desc: "大于等于" },
+          { op: "<", desc: "小于" },
+          { op: "<=", desc: "小于等于" },
+        ],
+      },
+      {
+        name: "status_code",
+        desc: "HTTP 状态码（整数）",
+        ops: [
+          { op: "==", desc: "等于" },
+          { op: "!=", desc: "不等于" },
+          { op: ">", desc: "大于" },
+          { op: ">=", desc: "大于等于" },
+          { op: "<", desc: "小于" },
+          { op: "<=", desc: "小于等于" },
+        ],
+      },
+      { name: "company_id", desc: "归属企业 ID（整数）", ops: [{ op: "==", desc: "等于" }] },
+      { name: "task_id", desc: "来源任务 ID（整数）", ops: [{ op: "==", desc: "等于" }] },
+    ];
+  }
+
+  const fuzzy = "Fuzzy match";
+  const exact = "Exact match";
+  const exclude = "Exclude";
+  const eq = "Equals";
+  const neq = "Not equal";
+  const gt = "Greater than";
+  const gte = "Greater or equal";
+  const lt = "Less than";
+  const lte = "Less or equal";
+
+  return [
+    {
+      name: "domain",
+      desc: "Domain (root/subdomain/service)",
+      ops: [
+        { op: "=", desc: fuzzy },
+        { op: "==", desc: exact },
+        { op: "!=", desc: exclude },
+      ],
+    },
+    {
+      name: "ip",
+      desc: "IPv4/IPv6 address",
+      ops: [
+        { op: "=", desc: fuzzy },
+        { op: "==", desc: exact },
+        { op: "!=", desc: exclude },
+      ],
+    },
+    {
+      name: "url",
+      desc: "Full URL (service/endpoint)",
+      ops: [
+        { op: "=", desc: fuzzy },
+        { op: "==", desc: exact },
+        { op: "!=", desc: exclude },
+      ],
+    },
+    {
+      name: "root_domain",
+      desc: "Root domain",
+      ops: [
+        { op: "=", desc: fuzzy },
+        { op: "==", desc: exact },
+        { op: "!=", desc: exclude },
+      ],
+    },
+    {
+      name: "page_title",
+      desc: "Page title (HTTP service)",
+      ops: [
+        { op: "=", desc: fuzzy },
+        { op: "==", desc: exact },
+        { op: "!=", desc: exclude },
+      ],
+    },
+    {
+      name: "icp",
+      desc: "ICP filing number",
+      ops: [
+        { op: "=", desc: fuzzy },
+        { op: "==", desc: exact },
+        { op: "!=", desc: exclude },
+      ],
+    },
+    {
+      name: "service_name",
+      desc: "Service name (non-HTTP)",
+      ops: [
+        { op: "=", desc: fuzzy },
+        { op: "==", desc: exact },
+        { op: "!=", desc: exclude },
+      ],
+    },
+    {
+      name: "app_name",
+      desc: "Application name",
+      ops: [
+        { op: "=", desc: fuzzy },
+        { op: "==", desc: exact },
+        { op: "!=", desc: exclude },
+      ],
+    },
+    {
+      name: "bundle_id",
+      desc: "App Bundle ID",
+      ops: [
+        { op: "=", desc: fuzzy },
+        { op: "==", desc: exact },
+        { op: "!=", desc: exclude },
+      ],
+    },
+    {
+      name: "category",
+      desc: "Application category",
+      ops: [
+        { op: "=", desc: fuzzy },
+        { op: "==", desc: exact },
+        { op: "!=", desc: exclude },
+      ],
+    },
+    {
+      name: "app_icp",
+      desc: "App ICP filing",
+      ops: [
+        { op: "=", desc: fuzzy },
+        { op: "==", desc: exact },
+        { op: "!=", desc: exclude },
+      ],
+    },
+    {
+      name: "method",
+      desc: "HTTP method (GET/POST/PUT/…)",
+      ops: [
+        { op: "==", desc: exact },
+        { op: "!=", desc: exclude },
+      ],
+    },
+    {
+      name: "service_type",
+      desc: "Service type: http | other",
+      ops: [
+        { op: "==", desc: exact },
+        { op: "!=", desc: exclude },
+      ],
+    },
+    {
+      name: "record_type",
+      desc: "DNS record type (A/CNAME/MX/…)",
+      ops: [
+        { op: "==", desc: exact },
+        { op: "!=", desc: exclude },
+      ],
+    },
+    {
+      name: "technology",
+      desc: "Technology fingerprint (array)",
+      ops: [
+        { op: "=", desc: fuzzy },
+        { op: "==", desc: exact },
+        { op: "!=", desc: exclude },
+      ],
+    },
+    {
+      name: "port",
+      desc: "Port number (integer)",
+      ops: [
+        { op: "==", desc: eq },
+        { op: "!=", desc: neq },
+        { op: ">", desc: gt },
+        { op: ">=", desc: gte },
+        { op: "<", desc: lt },
+        { op: "<=", desc: lte },
+      ],
+    },
+    {
+      name: "status_code",
+      desc: "HTTP status code (integer)",
+      ops: [
+        { op: "==", desc: eq },
+        { op: "!=", desc: neq },
+        { op: ">", desc: gt },
+        { op: ">=", desc: gte },
+        { op: "<", desc: lt },
+        { op: "<=", desc: lte },
+      ],
+    },
+    { name: "company_id", desc: "Company ID (integer)", ops: [{ op: "==", desc: eq }] },
+    { name: "task_id", desc: "Source task ID (integer)", ops: [{ op: "==", desc: eq }] },
+  ];
+}
+
+function getLogicOps(locale: string): { label: string; desc: string }[] {
+  if (locale === "pt") {
+    return [
+      { label: "AND", desc: "E (ambas as condições atendidas)" },
+      { label: "OR", desc: "OU (qualquer uma das condições)" },
+    ];
+  }
+  if (locale === "zh") {
+    return [
+      { label: "AND", desc: "且（两个条件都满足）" },
+      { label: "OR", desc: "或（满足其中之一）" },
+    ];
+  }
+  return [
+    { label: "AND", desc: "AND (both conditions match)" },
+    { label: "OR", desc: "OR (either condition matches)" },
+  ];
+}
 
 interface DslSuggestion {
   kind: "field" | "operator" | "logic";
@@ -186,7 +560,12 @@ interface DslSuggestion {
   insertText: string;
 }
 
-function getDslSuggestions(text: string, cursor: number): DslSuggestion[] {
+function getDslSuggestions(
+  text: string,
+  cursor: number,
+  fields: DslFieldDef[],
+  logicOps: { label: string; desc: string }[],
+): DslSuggestion[] {
   const before = text.slice(0, cursor);
   // Current token: non-whitespace, non-paren run ending at cursor
   const tokenMatch = before.match(/([^\s()]*$)/);
@@ -197,7 +576,7 @@ function getDslSuggestions(text: string, cursor: number): DslSuggestion[] {
   if (/^[a-z_]+(==|!=|>=|<=|=|>|<)/.test(currentToken)) return [];
 
   // Complete known field name → suggest operators for that field
-  const exactField = DSL_FIELDS.find((f) => f.name === currentToken.toLowerCase());
+  const exactField = fields.find((f) => f.name === currentToken.toLowerCase());
   if (exactField) {
     return exactField.ops.map(({ op, desc }) => ({
       kind: "operator",
@@ -215,19 +594,21 @@ function getDslSuggestions(text: string, cursor: number): DslSuggestion[] {
 
   // Current token is a prefix of AND/OR and follows a complete expression
   if (/^(a|an|and|o|or)$/i.test(currentToken) && afterExpression) {
-    return LOGIC_OPS.filter((l) => l.label.startsWith(currentToken.toUpperCase())).map(({ label, desc }) => ({
-      kind: "logic",
-      label,
-      desc,
-      replaceStart: tokenStart,
-      replaceEnd: cursor,
-      insertText: `${label} `,
-    }));
+    return logicOps
+      .filter((l) => l.label.startsWith(currentToken.toUpperCase()))
+      .map(({ label, desc }) => ({
+        kind: "logic",
+        label,
+        desc,
+        replaceStart: tokenStart,
+        replaceEnd: cursor,
+        insertText: `${label} `,
+      }));
   }
 
   // No current token, after a complete expression → suggest AND/OR
   if (!currentToken && afterExpression) {
-    return LOGIC_OPS.map(({ label, desc }) => ({
+    return logicOps.map(({ label, desc }) => ({
       kind: "logic",
       label,
       desc,
@@ -239,14 +620,16 @@ function getDslSuggestions(text: string, cursor: number): DslSuggestion[] {
 
   // Default: suggest fields filtered by prefix
   const prefix = currentToken.toLowerCase();
-  return DSL_FIELDS.filter((f) => f.name.startsWith(prefix)).map((f) => ({
-    kind: "field",
-    label: f.name,
-    desc: f.desc,
-    replaceStart: tokenStart,
-    replaceEnd: cursor,
-    insertText: f.name,
-  }));
+  return fields
+    .filter((f) => f.name.startsWith(prefix))
+    .map((f) => ({
+      kind: "field",
+      label: f.name,
+      desc: f.desc,
+      replaceStart: tokenStart,
+      replaceEnd: cursor,
+      insertText: f.name,
+    }));
 }
 
 function applyDslSuggestion(text: string, s: DslSuggestion): { text: string; cursor: number } {
@@ -261,7 +644,7 @@ const KIND_STYLE: Record<string, string> = {
 };
 
 // AssetDslSearch is the shared DSL search box: a monospace input with a
-// field/operator/logic autocomplete popover and a status line ("找到 N 条" /
+// field/operator/logic autocomplete popover and a status line ("Found N" /
 // error / loading). Used by both the global asset view and the per-task view.
 export function AssetDslSearch({
   query,
@@ -276,17 +659,46 @@ export function AssetDslSearch({
   error: string;
   count?: number;
 }) {
+  const { locale } = useI18n();
   const inputRef = React.useRef<HTMLInputElement>(null);
   const [suggestions, setSuggestions] = React.useState<DslSuggestion[]>([]);
   const [selIdx, setSelIdx] = React.useState(0);
   const [open, setOpen] = React.useState(false);
 
-  const refresh = React.useCallback((val: string, pos: number) => {
-    const suggs = getDslSuggestions(val, pos);
-    setSuggestions(suggs);
-    setSelIdx(0);
-    setOpen(suggs.length > 0);
-  }, []);
+  const fields = React.useMemo(() => getDslFields(locale), [locale]);
+  const logicOps = React.useMemo(() => getLogicOps(locale), [locale]);
+
+  const labels = React.useMemo(() => {
+    if (locale === "pt") {
+      return {
+        placeholder: "Busca DSL: domain=example AND status_code>=400",
+        searching: "Buscando…",
+        found: (n: number) => `${n} encontrado(s)`,
+      };
+    }
+    if (locale === "zh") {
+      return {
+        placeholder: "DSL 搜索：domain=example AND status_code>=400",
+        searching: "搜索中…",
+        found: (n: number) => `找到 ${n} 条`,
+      };
+    }
+    return {
+      placeholder: "DSL search: domain=example AND status_code>=400",
+      searching: "Searching…",
+      found: (n: number) => `Found ${n}`,
+    };
+  }, [locale]);
+
+  const refresh = React.useCallback(
+    (val: string, pos: number) => {
+      const suggs = getDslSuggestions(val, pos, fields, logicOps);
+      setSuggestions(suggs);
+      setSelIdx(0);
+      setOpen(suggs.length > 0);
+    },
+    [fields, logicOps],
+  );
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value;
@@ -341,7 +753,7 @@ export function AssetDslSearch({
         <SearchIcon className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
         <Input
           ref={inputRef}
-          placeholder="DSL 搜索：domain=example AND status_code>=400"
+          placeholder={labels.placeholder}
           value={query}
           onChange={handleChange}
           onKeyDown={handleKeyDown}
@@ -375,7 +787,13 @@ export function AssetDslSearch({
       </div>
       {query.trim() && !open && (
         <p className="pl-1 text-[11px] text-muted-foreground">
-          {loading ? "搜索中…" : error ? <span className="text-destructive">{error}</span> : `找到 ${count ?? 0} 条`}
+          {loading ? (
+            labels.searching
+          ) : error ? (
+            <span className="text-destructive">{error}</span>
+          ) : (
+            labels.found(count ?? 0)
+          )}
         </p>
       )}
     </div>

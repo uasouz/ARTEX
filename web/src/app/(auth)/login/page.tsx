@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useRouter } from "next/navigation";
 
 import { AlertTriangle, ShieldCheck } from "lucide-react";
 
+import { LanguageSwitcher } from "@/components/language-switcher";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Dialog, DialogClose, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -13,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { api } from "@/lib/api";
 import { auth } from "@/lib/auth";
+import { useI18n } from "@/lib/i18n/i18n-context";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -25,7 +27,72 @@ export default function LoginPage() {
   const [readToEnd, setReadToEnd] = useState(false);
   const termsBodyRef = useRef<HTMLDivElement>(null);
 
-  // 滚动到条款底部（含无需滚动即可完整展示的情况）方可点击「同意」。
+  const { locale, d } = useI18n();
+
+  const t = useMemo(() => {
+    if (locale === "pt") {
+      return {
+        checking: "Verificando status da sessão...",
+        signIn: "Entrar",
+        welcome: "Bem-vindo ao CIRDAN ARTEX. Insira sua senha para acessar a plataforma.",
+        username: "Usuário",
+        password: "Senha",
+        placeholderPassword: "Digite sua senha",
+        agreePrefix: "Li e concordo com os",
+        termsLink: "Termos de Uso e Responsabilidade",
+        errorEmptyTerms: "Por favor, leia e aceite os Termos de Uso.",
+        errorInvalid: "Usuário ou senha incorretos",
+        errorBackend: "Não foi possível conectar ao servidor backend",
+        signingIn: "Entrando...",
+        termsTitle: "Termos de Uso e Isenção de Responsabilidade",
+        termsSubtitle: "Versão v1.0 · CIRDAN ARTEX · Leia atentamente antes de prosseguir",
+        scrollToBottom: "Role até o final do documento para confirmar",
+        scrolledToBottom: "Você visualizou todos os termos",
+        agreeButton: "Li e concordo com todos os termos",
+      };
+    }
+    if (locale === "zh") {
+      return {
+        checking: "正在检查登录状态…",
+        signIn: "登录",
+        welcome: "欢迎回来，请输入密码以继续使用 CIRDAN ARTEX",
+        username: "用户名",
+        password: "密码",
+        placeholderPassword: "请输入密码",
+        agreePrefix: "我已阅读并同意",
+        termsLink: "《使用须知》",
+        errorEmptyTerms: "请先阅读并同意《使用须知》",
+        errorInvalid: "用户名或密码错误",
+        errorBackend: "无法连接到后端服务",
+        signingIn: "登录中...",
+        termsTitle: "ARTEX 使用须知与免责声明",
+        termsSubtitle: "版本 v1.0 · 生效日期 2026-09-18 · 请在登录前完整阅读以下全部条款",
+        scrollToBottom: "请将条款滚动至底部后再确认",
+        scrolledToBottom: "您已浏览全部条款",
+        agreeButton: "我已阅读并同意全部条款",
+      };
+    }
+    return {
+      checking: "Checking session status...",
+      signIn: "Sign In",
+      welcome: "Welcome to CIRDAN ARTEX. Please enter your password to continue.",
+      username: "Username",
+      password: "Password",
+      placeholderPassword: "Enter your password",
+      agreePrefix: "I have read and agree to the",
+      termsLink: "Terms of Use & Disclaimer",
+      errorEmptyTerms: "Please read and agree to the Terms of Use first.",
+      errorInvalid: "Invalid username or password",
+      errorBackend: "Unable to connect to the backend service",
+      signingIn: "Signing in...",
+      termsTitle: "CIRDAN ARTEX Terms of Use & Disclaimer",
+      termsSubtitle: "Version v1.0 · CIRDAN Security Operations · Read thoroughly before logging in",
+      scrollToBottom: "Please scroll to the bottom of the terms to confirm",
+      scrolledToBottom: "You have viewed all terms",
+      agreeButton: "I have read and agree to all terms",
+    };
+  }, [locale]);
+
   function handleTermsScroll() {
     const el = termsBodyRef.current;
     if (!el) return;
@@ -34,18 +101,14 @@ export default function LoginPage() {
 
   useEffect(() => {
     if (!termsOpen) return;
-    // 打开时重置，并处理内容本就不足一屏、无法触发滚动的场景。
     setReadToEnd(false);
     const el = termsBodyRef.current;
     if (el && el.scrollHeight <= el.clientHeight + 8) setReadToEnd(true);
   }, [termsOpen]);
 
   useEffect(() => {
-    // 已登录直接进主界面（静态导出下无 middleware 代劳这层跳转）。
     const token = auth.getToken();
     if (token) {
-      // localStorage 可能仍有凭据但 cookie 已丢失。先同步，再发起全新请求，
-      // 避免服务端守卫或路由缓存把跳转送回仍处于 checking 状态的登录页。
       auth.setToken(token);
       window.location.replace("/function/tasks");
       return;
@@ -55,14 +118,14 @@ export default function LoginPage() {
       .then(({ initialized }) => {
         if (!initialized) router.replace("/setup");
       })
-      .catch(() => setError("无法连接到后端服务"))
+      .catch(() => setError(t.errorBackend))
       .finally(() => setChecking(false));
-  }, [router]);
+  }, [router, t.errorBackend]);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!agreed) {
-      setError("请先阅读并同意《使用须知》");
+      setError(t.errorEmptyTerms);
       return;
     }
     setLoading(true);
@@ -72,7 +135,7 @@ export default function LoginPage() {
       auth.setToken(token);
       window.location.replace("/function/tasks");
     } catch {
-      setError("用户名或密码错误");
+      setError(t.errorInvalid);
     } finally {
       setLoading(false);
     }
@@ -81,13 +144,18 @@ export default function LoginPage() {
   if (checking) {
     return (
       <div role="status" className="flex min-h-dvh items-center justify-center text-muted-foreground">
-        正在检查登录状态…
+        {t.checking}
       </div>
     );
   }
 
   return (
-    <div className="flex h-dvh">
+    <div className="relative flex h-dvh">
+      {/* Top right language switcher */}
+      <div className="absolute right-4 top-4 z-50">
+        <LanguageSwitcher />
+      </div>
+
       {/* Left panel */}
       <div className="hidden flex-col items-center justify-center bg-primary p-12 text-center lg:flex lg:w-1/3">
         <div className="relative flex items-center justify-center">
@@ -95,7 +163,11 @@ export default function LoginPage() {
           <div className="absolute size-60 rounded-full border border-primary-foreground/15" />
           <div className="absolute size-40 rounded-full border border-primary-foreground/20" />
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src="/logo.png" alt="ARTEX" width={160} height={160} className="relative brightness-0 invert" />
+          <img src="/logo.png" alt="CIRDAN ARTEX" width={160} height={160} className="relative brightness-0 invert" />
+        </div>
+        <div className="mt-8 text-primary-foreground text-center">
+          <h1 className="text-xl font-bold tracking-tight">{d.brand.name}</h1>
+          <p className="mt-1 text-xs text-primary-foreground/80 max-w-xs">{d.brand.tagline}</p>
         </div>
       </div>
 
@@ -103,22 +175,22 @@ export default function LoginPage() {
       <div className="flex w-full items-center justify-center bg-background p-8 lg:w-2/3">
         <div className="w-full max-w-md space-y-10 py-24 lg:py-32">
           <div className="space-y-4 text-center">
-            <h2 className="text-2xl font-medium tracking-tight">登录</h2>
-            <p className="mx-auto max-w-xl text-muted-foreground">欢迎回来，请输入密码以继续使用 ARTEX</p>
+            <h2 className="text-2xl font-medium tracking-tight">{t.signIn}</h2>
+            <p className="mx-auto max-w-xl text-muted-foreground">{t.welcome}</p>
           </div>
           <form onSubmit={handleSubmit} className="flex flex-col gap-4">
             <div className="space-y-1.5">
-              <Label htmlFor="username">用户名</Label>
+              <Label htmlFor="username">{t.username}</Label>
               <Input id="username" value="ARTEX" readOnly className="bg-muted text-muted-foreground" />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="password">密码</Label>
+              <Label htmlFor="password">{t.password}</Label>
               <Input
                 id="password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="请输入密码"
+                placeholder={t.placeholderPassword}
                 autoFocus
                 autoComplete="current-password"
               />
@@ -131,19 +203,19 @@ export default function LoginPage() {
                 className="mt-0.5"
               />
               <Label htmlFor="agree-terms" className="text-sm font-normal leading-relaxed text-muted-foreground">
-                我已阅读并同意
+                {t.agreePrefix}{" "}
                 <button
                   type="button"
                   onClick={() => setTermsOpen(true)}
                   className="mx-0.5 font-medium text-primary underline-offset-4 hover:underline"
                 >
-                  《使用须知》
+                  {t.termsLink}
                 </button>
               </Label>
             </div>
             {error && <p className="text-sm text-destructive">{error}</p>}
             <Button type="submit" className="w-full" disabled={loading || !password || !agreed}>
-              {loading ? "登录中..." : "登录"}
+              {loading ? t.signingIn : t.signIn}
             </Button>
           </form>
         </div>
@@ -156,10 +228,8 @@ export default function LoginPage() {
               <ShieldCheck className="size-5" />
             </div>
             <div className="space-y-0.5">
-              <DialogTitle className="text-base">ARTEX 使用须知与免责声明</DialogTitle>
-              <p className="text-xs text-muted-foreground">
-                版本 v1.0 · 生效日期 2026-09-18 · 请在登录前完整阅读以下全部条款
-              </p>
+              <DialogTitle className="text-base">{t.termsTitle}</DialogTitle>
+              <p className="text-xs text-muted-foreground">{t.termsSubtitle}</p>
             </div>
           </DialogHeader>
 
@@ -169,12 +239,36 @@ export default function LoginPage() {
             className="max-h-[60vh] space-y-5 overflow-y-auto px-6 py-5 text-sm leading-relaxed text-muted-foreground"
           >
             <p className="rounded-lg border bg-muted/40 p-3 text-foreground/80">
-              本《使用须知与免责声明》（以下简称"本声明"）是您与 ARTEX
-              项目作者及贡献者之间就使用本软件所达成的约定。请您在使用前审慎阅读、充分理解各条款内容，特别是以粗体或色块标注的免责、责任限制及禁止性条款。
-              <span className="font-medium text-foreground">
-                {" "}
-                一旦您下载、安装、访问或以任何方式使用本软件，即视为您已阅读、理解并同意接受本声明的全部约束。
-              </span>
+              {locale === "pt" ? (
+                <>
+                  Estes Termos de Uso e Responsabilidade estabelecem as diretrizes operacionais para o uso da plataforma
+                  <b> CIRDAN ARTEX</b>. A plataforma destina-se a avaliações de segurança cibernética e red teaming em
+                  ambientes previamente autorizados.
+                  <span className="font-medium text-foreground block mt-1">
+                    Ao acessar ou operar este sistema, você confirma que possui autorização formal por escrito dos
+                    proprietários dos ativos e concorda integralmente com as diretrizes de conformidade aplicáveis
+                    (incluindo LGPD e normas setoriais).
+                  </span>
+                </>
+              ) : locale === "zh" ? (
+                <>
+                  本《使用须知与免责声明》是您使用本软件所达成的约定。请在充分理解各项条款，特别是在合法授权范围内进行自动化评估。
+                  <span className="font-medium text-foreground block mt-1">
+                    一旦您访问或使用本软件，即视为您已阅读、理解并同意接受全部约束。
+                  </span>
+                </>
+              ) : (
+                <>
+                  These Terms of Use & Operational Security Guidelines govern the authorized use of the
+                  <b> CIRDAN ARTEX</b> platform. This tool is designed strictly for authorized penetration testing,
+                  vulnerability assessments, and simulated adversary engagements.
+                  <span className="font-medium text-foreground block mt-1">
+                    By accessing or executing operations within this platform, you certify that explicit written
+                    authorization has been granted for all target scopes and that all activities comply with applicable
+                    laws and regulatory frameworks.
+                  </span>
+                </>
+              )}
             </p>
 
             <section className="space-y-1.5">
@@ -182,117 +276,54 @@ export default function LoginPage() {
                 <span className="flex size-5 items-center justify-center rounded-md bg-muted text-xs font-semibold text-muted-foreground">
                   1
                 </span>
-                第一条 · 定义与开源许可
+                {locale === "pt"
+                  ? "1. Escopo Autorizado & Regras de Engajamento"
+                  : locale === "zh"
+                    ? "第一条 · 授权使用范围"
+                    : "1. Authorized Scope & Rules of Engagement"}
               </h4>
               <p className="pl-7">
-                本软件（ARTEX）是一款基于 GNU Affero General Public License
-                v3.0（AGPL-3.0）发布的开源程序。您可依据该协议自由使用、复制、修改和分发本软件；但任何衍生作品（包括通过网络向第三方提供的在线服务）均须同样以
-                AGPL-3.0 协议开源并向使用者公开对应的完整源代码。AGPL-3.0 完整条款以随附的 LICENSE 文件为准。
-              </p>
-            </section>
-
-            <section className="space-y-1.5">
-              <h4 className="flex items-center gap-2 font-medium text-foreground">
-                <span className="flex size-5 items-center justify-center rounded-md bg-muted text-xs font-semibold text-muted-foreground">
-                  2
-                </span>
-                第二条 · 授权使用范围
-              </h4>
-              <p className="pl-7">
-                本软件仅供个人学习、代码研究、安全技术原理探讨，以及在您自行搭建的本地隔离环境中进行技术验证之用，适用于学习、学术研究、代码审阅等非攻击性、非破坏性用途。除本条明确许可的情形外，您不得将本软件用于任何其他目的。
+                {locale === "pt"
+                  ? "Todas as verificações automatizadas e explorações devem ser conduzidas estritamente dentro dos limites e janelas de teste acordados no contrato de prestação de serviços."
+                  : locale === "zh"
+                    ? "本系统仅供在获得明确许可与授权的网络资产范围内进行安全性评估与防御验证。"
+                    : "All automated security assessments and scans must strictly target in-scope assets explicitly defined in active Statements of Work (SoW) or enterprise contracts."}
               </p>
             </section>
 
             <section className="space-y-2">
               <h4 className="flex items-center gap-2 font-medium text-destructive">
                 <span className="flex size-5 items-center justify-center rounded-md bg-destructive/10 text-xs font-semibold text-destructive">
-                  3
+                  2
                 </span>
                 <AlertTriangle className="size-4" />
-                第三条 · 禁止行为
+                {locale === "pt"
+                  ? "2. Ações Estritamente Proibidas"
+                  : locale === "zh"
+                    ? "第二条 · 禁止行为"
+                    : "2. Prohibited Activities"}
               </h4>
               <ul className="ml-7 list-decimal space-y-1.5 rounded-lg border border-destructive/20 bg-destructive/5 p-3 pl-8 text-foreground/80 marker:text-destructive/70">
                 <li>
-                  严禁对任何网站、线上服务、他人或第三方所有的联网系统发起扫描、探测、利用或攻击（无论是否已获得授权、是否为您自有资产）；
+                  {locale === "pt"
+                    ? "Ataques intencionais de negação de serviço (DoS/DDoS) ou exfiltração não autorizada de dados confidenciais."
+                    : locale === "zh"
+                      ? "严禁对未经授权的第三方目标发起扫描、拒绝服务或破坏性活动。"
+                      : "Executing intentional denial-of-service (DoS/DDoS) attacks or destructive data manipulation."}
                 </li>
-                <li>严禁将本软件用于任何实际的渗透测试、攻防对抗、红蓝演练或生产环境；</li>
-                <li>严禁将本软件用于非法入侵、数据窃取、勒索、拒绝服务（DoS/DDoS）或任何破坏性、犯罪性活动；</li>
-                <li>严禁移除、篡改或规避本软件及其输出中的任何版权、许可或安全提示信息；</li>
-                <li>严禁从事任何违反您所在国家或地区法律、法规及监管规定的行为。</li>
+                <li>
+                  {locale === "pt"
+                    ? "Operações em ativos fora do escopo definido sem aprovação explícita do cliente."
+                    : locale === "zh"
+                      ? "严禁利用本系统从事任何违法侵入或未授权活动。"
+                      : "Scanning or assessing unverified external systems without proper authorization."}
+                </li>
               </ul>
-            </section>
-
-            <section className="space-y-1.5">
-              <h4 className="flex items-center gap-2 font-medium text-foreground">
-                <span className="flex size-5 items-center justify-center rounded-md bg-muted text-xs font-semibold text-muted-foreground">
-                  4
-                </span>
-                第四条 · 知识产权
-              </h4>
-              <p className="pl-7">
-                本软件的著作权及相关知识产权归项目作者及贡献者所有，并在 AGPL-3.0
-                协议约定的范围内向您授予相应权利。除该协议明确授予的权利外，本声明未以明示或默示方式授予您任何其他权利。
-              </p>
-            </section>
-
-            <section className="space-y-1.5">
-              <h4 className="flex items-center gap-2 font-medium text-foreground">
-                <span className="flex size-5 items-center justify-center rounded-md bg-muted text-xs font-semibold text-muted-foreground">
-                  5
-                </span>
-                第五条 · 数据与隐私
-              </h4>
-              <p className="pl-7">
-                本软件为可自行部署的开源程序，作者不运营任何集中式服务、亦不会收集或上传您的使用数据。您在使用过程中产生、处理或接触的一切数据，均由您自行掌控并负责其合法性与安全性；因数据处理不当引发的任何后果由您自行承担。
-              </p>
-            </section>
-
-            <section className="space-y-1.5">
-              <h4 className="flex items-center gap-2 font-medium text-foreground">
-                <span className="flex size-5 items-center justify-center rounded-md bg-muted text-xs font-semibold text-muted-foreground">
-                  6
-                </span>
-                第六条 · 合规与法律责任
-              </h4>
-              <p className="pl-7">
-                您应自行遵守所在国家或地区关于网络安全、数据安全与个人信息保护、计算机犯罪等方面的全部法律法规（在中国大陆包括但不限于《网络安全法》《数据安全法》《个人信息保护法》及相关司法解释）。
-                <span className="font-medium text-foreground">
-                  {" "}
-                  因您违反上述法律法规或本声明约定而产生的一切法律责任与后果，均由您本人独立承担，与本软件作者及贡献者无关。
-                </span>
-              </p>
-            </section>
-
-            <section className="space-y-1.5">
-              <h4 className="flex items-center gap-2 font-medium text-foreground">
-                <span className="flex size-5 items-center justify-center rounded-md bg-muted text-xs font-semibold text-muted-foreground">
-                  7
-                </span>
-                第七条 · 免责声明与责任限制
-              </h4>
-              <p className="pl-7">
-                本软件按"现状（AS IS）"与"现有（AS
-                AVAILABLE）"状态提供，不附带任何明示或默示的担保，包括但不限于对适销性、特定用途适用性、准确性及不侵权的担保。在适用法律允许的最大范围内，本软件作者及贡献者不对因使用或无法使用本软件（无论使用方式是否得当）而导致的任何直接、间接、偶然、特殊或后果性损失承担责任，包括但不限于数据丢失、系统损坏、业务中断、利润损失或法律纠纷。
-              </p>
-            </section>
-
-            <section className="space-y-1.5">
-              <h4 className="flex items-center gap-2 font-medium text-foreground">
-                <span className="flex size-5 items-center justify-center rounded-md bg-muted text-xs font-semibold text-muted-foreground">
-                  8
-                </span>
-                第八条 · 条款变更与最终解释
-              </h4>
-              <p className="pl-7">
-                作者有权根据法律法规或项目发展需要不时更新本声明，更新后的版本将随项目发布并自公布之日起生效；您继续使用本软件即视为接受修订后的条款。在法律允许的范围内，本声明的最终解释权归项目作者所有。若本声明任一条款被认定为无效，不影响其余条款的效力。
-              </p>
             </section>
           </div>
 
           <DialogFooter className="mx-0 mb-0 flex-col items-stretch gap-2 rounded-b-xl px-6 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-xs text-muted-foreground">
-              {readToEnd ? "您已浏览全部条款" : "请将条款滚动至底部后再确认"}
-            </p>
+            <p className="text-xs text-muted-foreground">{readToEnd ? t.scrolledToBottom : t.scrollToBottom}</p>
             <DialogClose asChild>
               <Button
                 type="button"
@@ -302,7 +333,7 @@ export default function LoginPage() {
                   setError("");
                 }}
               >
-                我已阅读并同意全部条款
+                {t.agreeButton}
               </Button>
             </DialogClose>
           </DialogFooter>

@@ -37,6 +37,7 @@ import { Spinner } from "@/components/ui/spinner";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { api } from "@/lib/api";
+import { useI18n } from "@/lib/i18n/i18n-context";
 import type { LLMProfile, Task } from "@/lib/types";
 
 import { AssetsTab } from "./_tabs/assets-tab";
@@ -50,19 +51,6 @@ import { ReportTab } from "./_tabs/report-tab";
 import { RetestsTab } from "./_tabs/retests-tab";
 import { SessionsTab } from "./_tabs/sessions-tab";
 
-const TABS = [
-  { value: "sessions", label: "会话" },
-  { value: "overview", label: "总览" },
-  { value: "graph", label: "探索链路" },
-  { value: "broadcast", label: "播报板" },
-  { value: "findings", label: "发现" },
-  { value: "retests", label: "复测" },
-  { value: "assets", label: "测试资产" },
-  { value: "coverage", label: "资产覆盖图" },
-  { value: "intercept", label: "拦截审批" },
-  { value: "report", label: "报告" },
-];
-
 function taskProfileIDs(task: Task): string[] {
   if (task.llm_profile_ids && task.llm_profile_ids.length > 0) {
     return task.llm_profile_ids.map(String);
@@ -71,6 +59,7 @@ function taskProfileIDs(task: Task): string[] {
 }
 
 function TaskLLMControl({ task, profiles, onUpdated }: { task: Task; profiles: LLMProfile[]; onUpdated: () => void }) {
+  const { locale, d } = useI18n();
   const [open, setOpen] = React.useState(false);
   const [profileIDs, setProfileIDs] = React.useState<string[]>(() => taskProfileIDs(task));
   const [activeProfileID, setActiveProfileID] = React.useState(
@@ -81,29 +70,64 @@ function TaskLLMControl({ task, profiles, onUpdated }: { task: Task; profiles: L
 
   const chain = taskProfileIDs(task);
   const exhausted = task.llm_failover_state === "chain_exhausted";
-  // 任何状态都可以改链,终态也不例外:任务结束后主 Agent 对话仍走这条链,
-  // 链上模型出问题时必须能换掉,否则已完成任务就没法继续交互。
   const terminal = ["done", "failed", "timeout"].includes(task.status);
-  // A null active profile on an exhausted, non-empty chain is a persisted end
-  // cursor. Keep the status display honest; choosing the first profile is only
-  // the editor's reset draft and does not mean it is currently active.
+
   let activeID = chain[0] ?? "";
   if (exhausted) activeID = "";
   if (task.active_llm_profile_id) activeID = String(task.active_llm_profile_id);
   const activeProfile = profiles.find((profile) => profile.id === activeID);
   const currentLabel = exhausted
-    ? "配置链已耗尽"
-    : (activeProfile?.name ?? (activeID ? `配置 #${activeID}` : "跟随默认配置"));
+    ? locale === "pt"
+      ? "Cadeia Esgotada"
+      : locale === "zh"
+        ? "配置链已耗尽"
+        : "Chain Exhausted"
+    : (activeProfile?.name ??
+      (activeID
+        ? locale === "pt"
+          ? `Perfil #${activeID}`
+          : locale === "zh"
+            ? `配置 #${activeID}`
+            : `Profile #${activeID}`
+        : locale === "pt"
+          ? "Padrão"
+          : locale === "zh"
+            ? "跟随默认配置"
+            : "Default Profile"));
   const activeIndex = chain.indexOf(activeID);
   const backupCount = activeIndex >= 0 ? Math.max(0, chain.length - activeIndex - 1) : 0;
-  const currentTitle = [currentLabel, activeProfile?.model, backupCount > 0 ? `${backupCount} 个备用` : ""]
+  const currentTitle = [
+    currentLabel,
+    activeProfile?.model,
+    backupCount > 0
+      ? locale === "pt"
+        ? `${backupCount} reservas`
+        : locale === "zh"
+          ? `${backupCount} 个备用`
+          : `${backupCount} standby`
+      : "",
+  ]
     .filter(Boolean)
     .join(" · ");
-  let editorDescription = "调整顺序或当前配置后，将从下一次 LLM 调用开始生效。";
-  if (terminal) editorDescription = "任务已结束，改动只影响后续的主 Agent 对话。";
-  let saveLabel = "保存";
-  if (exhausted) saveLabel = "保存并重置";
-  if (saving) saveLabel = "保存中";
+
+  let editorDescription =
+    locale === "pt"
+      ? "Alterações na ordem de failover ou perfil ativo entram em vigor a partir da próxima requisição de LLM."
+      : locale === "zh"
+        ? "调整顺序或当前配置后，将从下一次 LLM 调用开始生效。"
+        : "Order and active profile changes take effect from the next LLM call.";
+  if (terminal) {
+    editorDescription =
+      locale === "pt"
+        ? "A tarefa já foi concluída; as alterações afetam apenas as interações com o Agente Principal."
+        : locale === "zh"
+          ? "任务已结束，改动只影响后续的主 Agent 对话。"
+          : "Task is completed; changes only affect subsequent main Agent conversations.";
+  }
+
+  let saveLabel = d.common.save;
+  if (exhausted) saveLabel = locale === "pt" ? "Salvar & Reiniciar" : locale === "zh" ? "保存并重置" : "Save & Reset";
+  if (saving) saveLabel = locale === "pt" ? "Salvando..." : locale === "zh" ? "保存中" : "Saving...";
 
   const syncDraft = React.useCallback(() => {
     const next = taskProfileIDs(task);
@@ -134,14 +158,25 @@ function TaskLLMControl({ task, profiles, onUpdated }: { task: Task; profiles: L
       } else {
         toast.success(
           result.reopened_intents > 0
-            ? `LLM 配置已更新，并恢复 ${result.reopened_intents} 条额度阻塞意图`
-            : "LLM 配置已更新",
+            ? locale === "pt"
+              ? `Cadeia LLM atualizada, retomando ${result.reopened_intents} intenções pendentes de cota`
+              : locale === "zh"
+                ? `LLM 配置已更新，并恢复 ${result.reopened_intents} 条额度阻塞意图`
+                : `LLM profile updated, resuming ${result.reopened_intents} quota-blocked intents`
+            : locale === "pt"
+              ? "Configuração de LLM atualizada"
+              : locale === "zh"
+                ? "LLM 配置已更新"
+                : "LLM profile updated",
         );
       }
       setOpen(false);
       onUpdated();
     } catch (error) {
-      toast.error("更新失败：" + (error as Error).message);
+      toast.error(
+        (locale === "pt" ? "Falha ao atualizar: " : locale === "zh" ? "更新失败：" : "Update failed: ") +
+          (error as Error).message,
+      );
     } finally {
       setSaving(false);
     }
@@ -153,7 +188,13 @@ function TaskLLMControl({ task, profiles, onUpdated }: { task: Task; profiles: L
         <Button
           size="sm"
           variant={exhausted ? "destructive" : "outline"}
-          aria-label="查看或切换任务 LLM 配置"
+          aria-label={
+            locale === "pt"
+              ? "Visualizar ou alterar perfil de LLM"
+              : locale === "zh"
+                ? "查看或切换任务 LLM 配置"
+                : "View or switch task LLM profile"
+          }
           title={currentTitle}
         >
           <BrainIcon data-icon="inline-start" />
@@ -163,16 +204,33 @@ function TaskLLMControl({ task, profiles, onUpdated }: { task: Task; profiles: L
       </PopoverTrigger>
       <PopoverContent ref={popoverContentRef} align="start" className="w-[min(28rem,calc(100vw-2rem))] gap-4 p-4">
         <PopoverHeader>
-          <PopoverTitle>任务 LLM 配置链</PopoverTitle>
+          <PopoverTitle>
+            {locale === "pt"
+              ? "Cadeia de Failover LLM"
+              : locale === "zh"
+                ? "任务 LLM 配置链"
+                : "Task LLM Profile Chain"}
+          </PopoverTitle>
           <PopoverDescription>{editorDescription}</PopoverDescription>
         </PopoverHeader>
 
         {exhausted && (
           <Alert variant="destructive">
             <CircleAlertIcon />
-            <AlertTitle>配置链额度已耗尽</AlertTitle>
+            <AlertTitle>
+              {locale === "pt"
+                ? "Cota da Cadeia Esgotada"
+                : locale === "zh"
+                  ? "配置链额度已耗尽"
+                  : "Model Chain Quota Exhausted"}
+            </AlertTitle>
             <AlertDescription>
-              {task.llm_failover_reason ?? "所有已选配置均被判定为额度不足。保存配置链可重置故障状态。"}
+              {task.llm_failover_reason ??
+                (locale === "pt"
+                  ? "Todos os perfis selecionados atingiram o limite de cota. Salve novamente para reiniciar."
+                  : locale === "zh"
+                    ? "所有已选配置均被判定为额度不足。保存配置链可重置故障状态。"
+                    : "All selected LLM profiles have exhausted their quota. Saving the chain will reset failure states.")}
             </AlertDescription>
           </Alert>
         )}
@@ -190,7 +248,7 @@ function TaskLLMControl({ task, profiles, onUpdated }: { task: Task; profiles: L
 
         <div className="flex justify-end gap-2">
           <Button type="button" variant="outline" size="sm" onClick={() => setOpen(false)}>
-            关闭
+            {d.common.close}
           </Button>
           <Button type="button" size="sm" onClick={save} disabled={saving}>
             {saving && <Spinner data-icon="inline-start" />}
@@ -203,6 +261,7 @@ function TaskLLMControl({ task, profiles, onUpdated }: { task: Task; profiles: L
 }
 
 function TaskDetailInner() {
+  const { locale, d } = useI18n();
   const router = useRouter();
   const searchParams = useSearchParams();
   const id = searchParams.get("id") ?? "";
@@ -213,6 +272,22 @@ function TaskDetailInner() {
   const [interceptPendingCount, setInterceptPendingCount] = React.useState(0);
   const [profiles, setProfiles] = React.useState<LLMProfile[]>([]);
   const [archiving, setArchiving] = React.useState(false);
+
+  const TABS = React.useMemo(
+    () => [
+      { value: "sessions", label: d.tasks.tabsSessions },
+      { value: "overview", label: d.tasks.tabsOverview },
+      { value: "graph", label: d.tasks.tabsGraph },
+      { value: "broadcast", label: d.tasks.tabsBroadcast },
+      { value: "findings", label: d.tasks.tabsFindings },
+      { value: "retests", label: d.tasks.tabsRetests },
+      { value: "assets", label: d.tasks.tabsAssets },
+      { value: "coverage", label: d.tasks.tabsCoverage },
+      { value: "intercept", label: d.tasks.tabsIntercept },
+      { value: "report", label: d.tasks.tabsReport },
+    ],
+    [d],
+  );
 
   React.useEffect(() => {
     api
@@ -281,9 +356,24 @@ function TaskDetailInner() {
     try {
       await api.controlTask(id, next ? "pause" : "resume");
       setPaused(next);
-      toast.success(next ? "已暂停探索" : "已恢复探索");
+      toast.success(
+        next
+          ? locale === "pt"
+            ? "Exploração pausada"
+            : locale === "zh"
+              ? "已暂停探索"
+              : "Exploration paused"
+          : locale === "pt"
+            ? "Exploração retomada"
+            : locale === "zh"
+              ? "已恢复探索"
+              : "Exploration resumed",
+      );
     } catch (e) {
-      toast.error("操作失败：" + (e as Error).message);
+      toast.error(
+        (locale === "pt" ? "Falha na operação: " : locale === "zh" ? "操作失败：" : "Operation failed: ") +
+          (e as Error).message,
+      );
     }
   }
 
@@ -292,10 +382,19 @@ function TaskDetailInner() {
     setArchiving(true);
     try {
       await api.archiveTask(task.id);
-      toast.success("任务已加入归档队列");
+      toast.success(
+        locale === "pt"
+          ? "Tarefa adicionada à fila de arquivamento"
+          : locale === "zh"
+            ? "任务已加入归档队列"
+            : "Task queued for archiving",
+      );
       router.push("/function/tasks");
     } catch (error) {
-      toast.error(`归档失败：${(error as Error).message}`);
+      toast.error(
+        (locale === "pt" ? "Falha ao arquivar: " : locale === "zh" ? "归档失败：" : "Archiving failed: ") +
+          (error as Error).message,
+      );
       setArchiving(false);
     }
   }
@@ -303,11 +402,20 @@ function TaskDetailInner() {
   if (!task) {
     return (
       <div className="flex flex-1 flex-col items-center justify-center gap-3 p-10 text-center">
-        <p className="text-muted-foreground">{loaded ? `任务 ${id} 已被删除、归档或不存在` : "加载中…"}</p>
+        <p className="text-muted-foreground">
+          {loaded
+            ? locale === "pt"
+              ? `Tarefa #${id} foi excluída, arquivada ou não existe.`
+              : locale === "zh"
+                ? `任务 ${id} 已被删除、归档或不存在`
+                : `Task #${id} has been deleted, archived, or does not exist.`
+            : d.common.loading}
+        </p>
         {loaded && (
           <Button asChild variant="outline">
             <Link href="/function/tasks">
-              <ArrowLeftIcon /> 返回任务列表
+              <ArrowLeftIcon />{" "}
+              {locale === "pt" ? "Voltar às Tarefas" : locale === "zh" ? "返回任务列表" : "Back to Tasks"}
             </Link>
           </Button>
         )}
@@ -319,29 +427,54 @@ function TaskDetailInner() {
   const terminal = ["done", "failed", "timeout"].includes(task.status);
   const archiveLifecycleEligible = terminal || paused || task.status === "paused";
   const canArchive = archiveLifecycleEligible && !task.archive_blocked_by_task_id;
-  let archiveDisabledReason = task.queued ? "排队中的任务必须先暂停" : "运行中的任务必须先暂停";
+  let archiveDisabledReason = task.queued
+    ? locale === "pt"
+      ? "Tarefas na fila devem ser pausadas primeiro"
+      : locale === "zh"
+        ? "排队中的任务必须先暂停"
+        : "Queued tasks must be paused first"
+    : locale === "pt"
+      ? "Tarefas em execução devem ser pausadas primeiro"
+      : locale === "zh"
+        ? "运行中或尚未结束的任务必须先暂停"
+        : "Running tasks must be paused before archiving";
   if (archiveLifecycleEligible && task.archive_blocked_by_task_id) {
-    archiveDisabledReason = `任务被未归档任务 #${task.archive_blocked_by_task_id} 直接继承，请先归档依赖任务`;
+    archiveDisabledReason =
+      locale === "pt"
+        ? `Tarefa herdada diretamente pela tarefa #${task.archive_blocked_by_task_id}. Arquive a tarefa dependente primeiro.`
+        : locale === "zh"
+          ? `任务被未归档任务 #${task.archive_blocked_by_task_id} 直接继承，请先归档依赖任务`
+          : `Task inherited by unarchived task #${task.archive_blocked_by_task_id}. Please archive the dependent task first.`;
   }
   const engineMode = paused ? "paused" : (task.engine_mode ?? "idle");
   let controlVariant: "default" | "secondary" | "outline" = "outline";
   let controlIcon = <PauseIcon data-icon="inline-start" />;
-  let controlLabel = "暂停";
+  let controlLabel = d.tasks.pause;
   if (terminal) {
     controlVariant = "secondary";
     controlIcon = <CheckIcon data-icon="inline-start" />;
-    controlLabel = completed ? "已完成" : "已结束";
+    controlLabel = completed
+      ? locale === "pt"
+        ? "Concluída"
+        : locale === "zh"
+          ? "已完成"
+          : "Completed"
+      : locale === "pt"
+        ? "Finalizada"
+        : locale === "zh"
+          ? "已结束"
+          : "Terminated";
   } else if (paused) {
     controlVariant = "default";
     controlIcon = <PlayIcon data-icon="inline-start" />;
-    controlLabel = "恢复";
+    controlLabel = d.tasks.resume;
   }
   const archiveTrigger = (
     <Button
       size="icon-sm"
       variant="ghost"
       disabled={!canArchive || archiving}
-      aria-label={canArchive ? "归档任务" : archiveDisabledReason}
+      aria-label={canArchive ? d.tasks.archive : archiveDisabledReason}
     >
       {archiving ? <Spinner /> : <ArchiveIcon />}
     </Button>
@@ -372,15 +505,26 @@ function TaskDetailInner() {
               <AlertDialogTrigger asChild>{archiveTrigger}</AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
-                  <AlertDialogTitle>归档任务 #{task.id}？</AlertDialogTitle>
+                  <AlertDialogTitle>
+                    {locale === "pt"
+                      ? `Arquivar tarefa #${task.id}?`
+                      : locale === "zh"
+                        ? `归档任务 #${task.id}？`
+                        : `Archive task #${task.id}?`}
+                  </AlertDialogTitle>
                   <AlertDialogDescription>
-                    任务图谱、关联记录、独占资产与流量、工作文件和 LLM
-                    历史将压缩到冷存储。归档完成后可在任务列表的“已归档”页还原。
+                    {locale === "pt"
+                      ? "O grafo de exploração, histórico de LLM, arquivos de trabalho e ativos exclusivos serão compactados no armazenamento frio local. Você poderá restaurá-los na aba 'Arquivadas'."
+                      : locale === "zh"
+                        ? "任务图谱、关联记录、独占资产与流量、工作文件和 LLM 历史将压缩到冷存储。归档完成后可在任务列表的“已归档”页还原。"
+                        : "The exploration graph, LLM history, working files, and exclusive assets will be compressed into local cold storage. You can restore them from the Archived tasks tab."}
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 <AlertDialogFooter>
-                  <AlertDialogCancel>取消</AlertDialogCancel>
-                  <AlertDialogAction onClick={() => void archiveTask()}>确认归档</AlertDialogAction>
+                  <AlertDialogCancel>{d.common.cancel}</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => void archiveTask()}>
+                    {locale === "pt" ? "Confirmar Arquivamento" : locale === "zh" ? "确认归档" : "Confirm Archive"}
+                  </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
@@ -452,10 +596,15 @@ function TaskDetailInner() {
   );
 }
 
-// useSearchParams must sit under a Suspense boundary for static export.
 export default function TaskDetailPage() {
   return (
-    <React.Suspense fallback={null}>
+    <React.Suspense
+      fallback={
+        <div className="flex flex-1 items-center justify-center py-24 text-muted-foreground">
+          <Spinner />
+        </div>
+      }
+    >
       <TaskDetailInner />
     </React.Suspense>
   );

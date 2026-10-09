@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger } from "@/components/ui/select";
 import { api } from "@/lib/api";
+import { useI18n } from "@/lib/i18n/i18n-context";
 import { useStoredSortPreference } from "@/lib/sort-preference";
 import { statusMeta } from "@/lib/status";
 import type { Finding, FindingStatus } from "@/lib/types";
@@ -22,10 +23,10 @@ type FindingSortField = "time";
 const FINDING_SORT_FIELDS: readonly FindingSortField[] = ["time"];
 const FINDING_SORT_PREFERENCE_KEY = "artex_task_findings_sort";
 
-function findingLabel(finding: Finding): string {
+function findingLabel(finding: Finding, unclassified: string): string {
   if (finding.name?.trim()) return finding.name;
-  if (finding.vulnclass?.trim()) return finding.vulnclass;
-  return "未分类";
+  if (finding.vulnclass.trim()) return finding.vulnclass;
+  return unclassified;
 }
 
 const FINDING_STATUSES: FindingStatus[] = [
@@ -44,10 +45,21 @@ function Row({
   f,
   contextTaskId,
   onStatus,
+  labels,
+  dateLocale,
 }: {
   f: Finding;
   contextTaskId: string;
   onStatus: (f: Finding, next: FindingStatus) => void;
+  labels: {
+    unclassified: string;
+    sourceReadOnly: (id: string) => string;
+    trafficEvidence: (count: number) => string;
+    viewDetails: string;
+    details: string;
+    evidencePoc: string;
+  };
+  dateLocale: string;
 }) {
   const [open, setOpen] = React.useState(false);
   return (
@@ -64,17 +76,17 @@ function Row({
           <StatusBadge domain="severity" value={f.severity} dot />
           <div className="flex min-w-0 flex-1 flex-col gap-1">
             <div className="flex min-w-0 items-center gap-2">
-              <span className="truncate font-medium">{findingLabel(f)}</span>
+              <span className="truncate font-medium">{findingLabel(f, labels.unclassified)}</span>
               {f.inherited && f.source_task_id && (
                 <Badge variant="outline" className="shrink-0">
-                  来源 #{f.source_task_id} · 只读
+                  {labels.sourceReadOnly(f.source_task_id)}
                 </Badge>
               )}
             </div>
             <span className="truncate text-xs text-muted-foreground">{f.summary}</span>
           </div>
         </button>
-        <Badge variant="outline">流量证据 {f.traffic_count ?? 0} 条</Badge>
+        <Badge variant="outline">{labels.trafficEvidence(f.traffic_count ?? 0)}</Badge>
         {f.assets && f.assets.length > 0 && (
           <div className="hidden shrink-0 flex-wrap justify-end gap-1 sm:flex">
             {f.assets.slice(0, 2).map((a) => (
@@ -108,7 +120,7 @@ function Row({
           <StatusBadge domain="finding" value={f.status} dot />
         )}
         <span className="hidden shrink-0 text-xs text-muted-foreground md:block">
-          {new Date(f.ts).toLocaleString("zh-CN")}
+          {new Date(f.ts).toLocaleString(dateLocale)}
         </span>
         {f.finding_id && (
           <Link
@@ -118,16 +130,16 @@ function Row({
                 : `/function/findings/detail?id=${f.finding_id}`
             }
             className="text-muted-foreground hover:text-primary inline-flex shrink-0 items-center gap-0.5 text-xs"
-            title="查看漏洞详情"
+            title={labels.viewDetails}
           >
-            详情
+            {labels.details}
             <ArrowUpRightIcon className="size-3" />
           </Link>
         )}
       </div>
       {open && (
         <div className="bg-muted/30 px-4 pb-4 pl-11">
-          <div className="mb-1 text-xs font-medium text-muted-foreground">证据 / PoC</div>
+          <div className="mb-1 text-xs font-medium text-muted-foreground">{labels.evidencePoc}</div>
           <pre className="overflow-auto rounded-md border bg-background p-3 font-mono text-xs whitespace-pre-wrap">
             {f.evidence}
           </pre>
@@ -138,6 +150,7 @@ function Row({
 }
 
 export function FindingsTab({ taskId }: { taskId: string }) {
+  const { locale } = useI18n();
   const [findings, setFindings] = React.useState<Finding[]>([]);
   const [sortPreference, setSortPreference] = useStoredSortPreference(
     FINDING_SORT_PREFERENCE_KEY,
@@ -145,6 +158,62 @@ export function FindingsTab({ taskId }: { taskId: string }) {
     "time",
     "desc",
   );
+
+  const t = React.useMemo(() => {
+    switch (locale) {
+      case "pt":
+        return {
+          unclassified: "Não classificado",
+          sourceReadOnly: (id: string) => `Origem #${id} · Somente leitura`,
+          trafficEvidence: (count: number) => `Evidências de tráfego: ${count}`,
+          viewDetails: "Ver detalhes da vulnerabilidade",
+          details: "Detalhes",
+          evidencePoc: "Evidência / PoC",
+          finding: "Vulnerabilidade",
+          discoveryTime: "Data de descoberta",
+          sortAsc: "Ordenação crescente por tempo de descoberta, clique para alternar",
+          sortDesc: "Ordenação decrescente por tempo de descoberta, clique para alternar",
+          empty: "Nenhuma vulnerabilidade confirmada para esta tarefa ou tarefas diretamente associadas.",
+          markedAs: (st: string) => `Marcado como "${st}"`,
+          updateFailed: "Falha ao atualizar: ",
+          dateLocale: "pt-BR",
+        };
+      case "zh":
+        return {
+          unclassified: "未分类",
+          sourceReadOnly: (id: string) => `来源 #${id} · 只读`,
+          trafficEvidence: (count: number) => `流量证据 ${count} 条`,
+          viewDetails: "查看漏洞详情",
+          details: "详情",
+          evidencePoc: "证据 / PoC",
+          finding: "漏洞",
+          discoveryTime: "发现时间",
+          sortAsc: "发现时间当前正序，点击切换排序方向",
+          sortDesc: "发现时间当前倒序，点击切换排序方向",
+          empty: "本任务及直接关联任务暂无确认发现。",
+          markedAs: (st: string) => `已标记为「${st}」`,
+          updateFailed: "更新失败：",
+          dateLocale: "zh-CN",
+        };
+      default:
+        return {
+          unclassified: "Unclassified",
+          sourceReadOnly: (id: string) => `Source #${id} · Read-only`,
+          trafficEvidence: (count: number) => `Traffic Evidence: ${count}`,
+          viewDetails: "View finding details",
+          details: "Details",
+          evidencePoc: "Evidence / PoC",
+          finding: "Finding",
+          discoveryTime: "Discovery Time",
+          sortAsc: "Discovery time currently ascending, click to toggle",
+          sortDesc: "Discovery time currently descending, click to toggle",
+          empty: "No confirmed findings for this task or directly associated tasks.",
+          markedAs: (st: string) => `Marked as "${st}"`,
+          updateFailed: "Update failed: ",
+          dateLocale: "en-US",
+        };
+    }
+  }, [locale]);
 
   React.useEffect(() => {
     let active = true;
@@ -159,25 +228,28 @@ export function FindingsTab({ taskId }: { taskId: string }) {
         });
     };
     load();
-    const t = setInterval(load, 3000);
+    const tTimer = setInterval(load, 3000);
     return () => {
       active = false;
-      clearInterval(t);
+      clearInterval(tTimer);
     };
   }, [taskId]);
 
-  const onStatus = React.useCallback(async (f: Finding, next: FindingStatus) => {
-    if (f.inherited || !f.finding_id || next === f.status) return;
-    const prev = f.status;
-    setFindings((cur) => cur.map((x) => (x.id === f.id ? { ...x, status: next } : x)));
-    try {
-      await api.setFindingStatus(f.finding_id, next);
-      toast.success(`已标记为「${statusMeta("finding", next).label}」`);
-    } catch (e) {
-      setFindings((cur) => cur.map((x) => (x.id === f.id ? { ...x, status: prev } : x)));
-      toast.error("更新失败：" + (e as Error).message);
-    }
-  }, []);
+  const onStatus = React.useCallback(
+    async (f: Finding, next: FindingStatus) => {
+      if (f.inherited || !f.finding_id || next === f.status) return;
+      const prev = f.status;
+      setFindings((cur) => cur.map((x) => (x.id === f.id ? { ...x, status: next } : x)));
+      try {
+        await api.setFindingStatus(f.finding_id, next);
+        toast.success(t.markedAs(statusMeta("finding", next).label));
+      } catch (e) {
+        setFindings((cur) => cur.map((x) => (x.id === f.id ? { ...x, status: prev } : x)));
+        toast.error(t.updateFailed + (e as Error).message);
+      }
+    },
+    [t],
+  );
 
   const items = findings
     .filter((f) => f.task_id === taskId || f.inherited)
@@ -191,11 +263,11 @@ export function FindingsTab({ taskId }: { taskId: string }) {
     <Card className="overflow-hidden py-0">
       <CardContent className="px-0">
         <div className="flex items-center border-b px-4 py-2 text-xs text-muted-foreground">
-          <span className="min-w-0 flex-1">漏洞</span>
+          <span className="min-w-0 flex-1">{t.finding}</span>
           <button
             type="button"
             className="inline-flex items-center gap-1 outline-none focus-visible:underline"
-            aria-label={`发现时间当前${sortPreference.direction === "asc" ? "正序" : "倒序"}，点击切换排序方向`}
+            aria-label={sortPreference.direction === "asc" ? t.sortAsc : t.sortDesc}
             onClick={() =>
               setSortPreference((current) => ({
                 field: "time",
@@ -203,7 +275,7 @@ export function FindingsTab({ taskId }: { taskId: string }) {
               }))
             }
           >
-            <span>发现时间</span>
+            <span>{t.discoveryTime}</span>
             {sortPreference.direction === "asc" ? (
               <ArrowUpIcon className="size-3.5" />
             ) : (
@@ -212,11 +284,23 @@ export function FindingsTab({ taskId }: { taskId: string }) {
           </button>
         </div>
         {items.map((f) => (
-          <Row key={f.id} f={f} contextTaskId={taskId} onStatus={onStatus} />
+          <Row
+            key={f.id}
+            f={f}
+            contextTaskId={taskId}
+            onStatus={onStatus}
+            labels={{
+              unclassified: t.unclassified,
+              sourceReadOnly: t.sourceReadOnly,
+              trafficEvidence: t.trafficEvidence,
+              viewDetails: t.viewDetails,
+              details: t.details,
+              evidencePoc: t.evidencePoc,
+            }}
+            dateLocale={t.dateLocale}
+          />
         ))}
-        {items.length === 0 && (
-          <p className="px-4 py-8 text-center text-sm text-muted-foreground">本任务及直接关联任务暂无确认发现。</p>
-        )}
+        {items.length === 0 && <p className="px-4 py-8 text-center text-sm text-muted-foreground">{t.empty}</p>}
       </CardContent>
     </Card>
   );

@@ -8,56 +8,87 @@ import { toast } from "sonner";
 import { Markdown } from "@/components/markdown";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Spinner } from "@/components/ui/spinner";
 import { api } from "@/lib/api";
-import { copyText } from "@/lib/utils";
+import { useI18n } from "@/lib/i18n/i18n-context";
 
 export function ReportTab({ taskId }: { taskId: string }) {
-  const [report, setReport] = React.useState<string>("");
+  const { locale } = useI18n();
+  const [report, setReport] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [copied, setCopied] = React.useState(false);
 
+  const labels = React.useMemo(() => {
+    switch (locale) {
+      case "pt":
+        return {
+          empty: "Nenhum relatório gerado para esta tarefa",
+          title: "Relatório de Teste de Intrusão (Markdown)",
+          copy: "Copiar",
+          copySuccess: "Relatório copiado para a área de transferência",
+          copyFailed: "Falha ao copiar: ",
+        };
+      case "zh":
+        return {
+          empty: "暂无报告",
+          title: "渗透测试报告（Markdown）",
+          copy: "复制",
+          copySuccess: "报告已复制到剪贴板",
+          copyFailed: "复制失败：",
+        };
+      default:
+        return {
+          empty: "No report generated yet",
+          title: "Security Assessment Report (Markdown)",
+          copy: "Copy",
+          copySuccess: "Report copied to clipboard",
+          copyFailed: "Failed to copy: ",
+        };
+    }
+  }, [locale]);
+
   React.useEffect(() => {
-    let active = true;
+    let cancelled = false;
     setLoading(true);
     api
-      .report(taskId)
-      .then((text) => {
-        if (active) setReport(text);
+      .report(taskId, locale)
+      .then((res) => {
+        if (cancelled) return;
+        setReport(res || null);
       })
       .catch(() => {
-        if (active) setReport("");
+        if (!cancelled) setReport(null);
       })
       .finally(() => {
-        if (active) setLoading(false);
+        if (!cancelled) setLoading(false);
       });
     return () => {
-      active = false;
+      cancelled = true;
     };
-  }, [taskId]);
+  }, [taskId, locale]);
 
-  async function copy() {
+  const copy = async () => {
     if (!report) return;
-    const ok = await copyText(report);
-    if (ok) {
+    try {
+      await navigator.clipboard.writeText(report);
       setCopied(true);
-      toast.success("已复制 Markdown");
-      setTimeout(() => setCopied(false), 1500);
-    } else {
-      toast.error("复制失败，请手动选择文本复制");
+      toast.success(labels.copySuccess);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (e) {
+      toast.error(`${labels.copyFailed}${(e as Error).message}`);
     }
-  }
+  };
 
   let content: React.ReactNode;
   if (loading) {
     content = (
-      <div className="flex flex-col items-center justify-center gap-2 rounded-md border border-dashed py-16 text-muted-foreground text-sm">
-        <FileTextIcon className="size-8 opacity-40" />
-        加载中…
+      <div className="flex h-48 items-center justify-center">
+        <Spinner />
       </div>
     );
   } else if (report) {
     content = (
-      <div className="max-h-[60vh] overflow-auto rounded-md border bg-muted/20 p-4">
+      <div className="overflow-x-auto">
         <Markdown text={report} />
       </div>
     );
@@ -65,7 +96,7 @@ export function ReportTab({ taskId }: { taskId: string }) {
     content = (
       <div className="flex flex-col items-center justify-center gap-2 rounded-md border border-dashed py-16 text-muted-foreground text-sm">
         <FileTextIcon className="size-8 opacity-40" />
-        暂无报告
+        {labels.empty}
       </div>
     );
   }
@@ -74,12 +105,12 @@ export function ReportTab({ taskId }: { taskId: string }) {
     <Card>
       <CardHeader className="flex-row items-center justify-between">
         <CardTitle className="flex items-center gap-2 text-sm">
-          <FileTextIcon className="size-4" /> 渗透测试报告（Markdown）
+          <FileTextIcon className="size-4" /> {labels.title}
         </CardTitle>
         <div className="flex gap-2">
           {report && (
             <Button size="sm" variant="outline" onClick={copy}>
-              {copied ? <CheckIcon /> : <CopyIcon />} 复制
+              {copied ? <CheckIcon /> : <CopyIcon />} {labels.copy}
             </Button>
           )}
         </div>

@@ -94,16 +94,19 @@ function domainHostname(value: string): string | null {
   }
 }
 
+// Scope validation returns stable machine-readable error codes (see
+// companyScopeErrorText for the localized display strings). Callers treat any
+// non-empty string as "invalid".
 export function companyScopeRuleError(rule: CompanyScopeRule): string {
   const value = rule.value.trim();
-  if (!value) return "请填写范围值";
+  if (!value) return "empty";
   if (Array.from(value).length > MAX_COMPANY_SCOPE_VALUE_LENGTH) {
-    return `最多 ${MAX_COMPANY_SCOPE_VALUE_LENGTH} 个字符`;
+    return "too_long";
   }
   if (rule.kind === "domain") {
-    if (/\s/.test(value)) return "请输入不含空格的有效域名或 URL";
+    if (/\s/.test(value)) return "domain_spaces";
     const hostname = domainHostname(value);
-    if (!hostname || ipVersion(hostname) !== null) return "请输入有效域名或 URL";
+    if (!hostname || ipVersion(hostname) !== null) return "invalid_domain";
     const labels = hostname.split(".");
     if (
       hostname.length > 253 ||
@@ -113,22 +116,69 @@ export function companyScopeRuleError(rule: CompanyScopeRule): string {
           !label || label.length > 63 || label.startsWith("-") || label.endsWith("-") || !/^[a-z0-9-]+$/i.test(label),
       )
     ) {
-      return "请输入有效域名或 URL";
+      return "invalid_domain";
     }
   }
-  if (rule.kind === "ip" && ipVersion(value) === null) return "请输入有效 IP";
+  if (rule.kind === "ip" && ipVersion(value) === null) return "invalid_ip";
   if (rule.kind === "cidr") {
     const separator = value.lastIndexOf("/");
-    if (separator <= 0) return "请输入 CIDR 网段";
+    if (separator <= 0) return "invalid_cidr";
     const address = value.slice(0, separator);
     const prefixText = value.slice(separator + 1);
     const version = ipVersion(address);
-    if (version === null || !/^\d+$/.test(prefixText)) return "请输入 CIDR 网段";
+    if (version === null || !/^\d+$/.test(prefixText)) return "invalid_cidr";
     const prefix = Number(prefixText);
-    if (version === 4 && (prefix < 16 || prefix > 32)) return "IPv4 网段前缀需为 /16 至 /32";
-    if (version === 6 && (prefix < 32 || prefix > 128)) return "IPv6 网段前缀需为 /32 至 /128";
+    if (version === 4 && (prefix < 16 || prefix > 32)) return "invalid_cidr_prefix_v4";
+    if (version === 6 && (prefix < 32 || prefix > 128)) return "invalid_cidr_prefix_v6";
   }
   return "";
+}
+
+/** Localized display text for a company-scope validation error code. */
+export function companyScopeErrorText(code: string, locale: "en" | "pt" | "zh"): string {
+  const table: Record<string, Record<"en" | "pt" | "zh", string>> = {
+    empty: {
+      en: "Enter a scope value",
+      pt: "Informe um valor de escopo",
+      zh: "请填写范围值",
+    },
+    too_long: {
+      en: `At most ${MAX_COMPANY_SCOPE_VALUE_LENGTH} characters`,
+      pt: `No máximo ${MAX_COMPANY_SCOPE_VALUE_LENGTH} caracteres`,
+      zh: `最多 ${MAX_COMPANY_SCOPE_VALUE_LENGTH} 个字符`,
+    },
+    domain_spaces: {
+      en: "Enter a valid domain or URL without spaces",
+      pt: "Informe um domínio ou URL válido sem espaços",
+      zh: "请输入不含空格的有效域名或 URL",
+    },
+    invalid_domain: {
+      en: "Enter a valid domain or URL",
+      pt: "Informe um domínio ou URL válido",
+      zh: "请输入有效域名或 URL",
+    },
+    invalid_ip: {
+      en: "Enter a valid IP address",
+      pt: "Informe um IP válido",
+      zh: "请输入有效 IP",
+    },
+    invalid_cidr: {
+      en: "Enter a valid CIDR network",
+      pt: "Informe uma rede CIDR válida",
+      zh: "请输入 CIDR 网段",
+    },
+    invalid_cidr_prefix_v4: {
+      en: "IPv4 prefix must be between /16 and /32",
+      pt: "O prefixo IPv4 deve estar entre /16 e /32",
+      zh: "IPv4 网段前缀需为 /16 至 /32",
+    },
+    invalid_cidr_prefix_v6: {
+      en: "IPv6 prefix must be between /32 and /128",
+      pt: "O prefixo IPv6 deve estar entre /32 e /128",
+      zh: "IPv6 网段前缀需为 /32 至 /128",
+    },
+  };
+  return table[code]?.[locale] ?? code;
 }
 
 export function classifyCompanyScopeLine(
@@ -138,7 +188,7 @@ export function classifyCompanyScopeLine(
 ): CompanyScopeTextIssue {
   const value = raw.trim();
   if (Array.from(value).length > MAX_COMPANY_SCOPE_VALUE_LENGTH) {
-    return { line, error: `最多 ${MAX_COMPANY_SCOPE_VALUE_LENGTH} 个字符` };
+    return { line, error: "too_long" };
   }
   if (preservedRule) {
     const rule = { kind: preservedRule.kind, value };
@@ -156,7 +206,7 @@ export function classifyCompanyScopeLine(
     return error ? { line, error } : { line, rule };
   }
   if (ipVersion(value) !== null) return { line, rule: { kind: "ip", value } };
-  if (looksLikeIPAddress(value)) return { line, error: "请输入有效 IP" };
+  if (looksLikeIPAddress(value)) return { line, error: "invalid_ip" };
 
   const looksLikeDomain = value.includes("://") || (!/\s/.test(value) && value.includes("."));
   if (looksLikeDomain) {

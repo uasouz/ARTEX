@@ -1,21 +1,59 @@
 "use client";
 
 import * as React from "react";
-import { Input } from "@/components/ui/input";
+
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { sseUrl } from "@/lib/api";
+import { useI18n } from "@/lib/i18n/i18n-context";
 import { MOCK } from "@/lib/mock/enabled";
 import type { LogLine } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-// Mock demo：无后端 SSE，塞几行示例日志。
+// Mock demo: when mock is enabled, populate sample log entries.
 const MOCK_LOGS: LogLine[] = [
-  { seq: 1, ts: "2026-07-26T03:55:00Z", level: "info", tag: "engine", text: "ARTEX v0.1.0 backend listening on :8787 (workers=3)" },
-  { seq: 2, ts: "2026-07-26T03:55:01Z", level: "info", tag: "config", text: "LLM configured from DB: anthropic / claude-opus-4-8" },
-  { seq: 3, ts: "2026-07-26T03:56:10Z", level: "info", tag: "planner", text: "task t-acme-web: 第 3 轮规划，生成意图 i-4" },
-  { seq: 4, ts: "2026-07-26T03:57:00Z", level: "warn", tag: "guard", text: "block bash: 目标越界 out.evil.example 不在 scope 内" },
-  { seq: 5, ts: "2026-07-26T03:57:30Z", level: "info", tag: "work#1", text: "report_finding: Default Credentials (high) 已落库" },
-  { seq: 6, ts: "2026-07-26T03:58:20Z", level: "error", tag: "work#3", text: "intercept: mysqldump 命中破坏性规则，等待人工审批" },
+  {
+    seq: 1,
+    ts: "2026-07-26T03:55:00Z",
+    level: "info",
+    tag: "engine",
+    text: "CIRDAN ARTEX backend listening on :8787 (workers=3)",
+  },
+  {
+    seq: 2,
+    ts: "2026-07-26T03:55:01Z",
+    level: "info",
+    tag: "config",
+    text: "LLM configured from DB: anthropic / claude-opus-4-8",
+  },
+  {
+    seq: 3,
+    ts: "2026-07-26T03:56:10Z",
+    level: "info",
+    tag: "planner",
+    text: "task t-acme-web: iteration 3 plan generated, intent i-4",
+  },
+  {
+    seq: 4,
+    ts: "2026-07-26T03:57:00Z",
+    level: "warn",
+    tag: "guard",
+    text: "block bash: target out.evil.example out of defined scope",
+  },
+  {
+    seq: 5,
+    ts: "2026-07-26T03:57:30Z",
+    level: "info",
+    tag: "work#1",
+    text: "report_finding: Default Credentials (high) recorded",
+  },
+  {
+    seq: 6,
+    ts: "2026-07-26T03:58:20Z",
+    level: "error",
+    tag: "work#3",
+    text: "intercept: mysqldump triggered high-risk rule, pending manual approval",
+  },
 ];
 
 const levelTone: Record<LogLine["level"], string> = {
@@ -23,32 +61,68 @@ const levelTone: Record<LogLine["level"], string> = {
   warn: "text-amber-600 dark:text-amber-400",
   error: "text-red-600 dark:text-red-400",
 };
-const levelDot: Record<LogLine["level"], string> = {
-  info: "bg-muted-foreground/40",
-  warn: "bg-amber-500",
-  error: "bg-red-500",
+
+const I18N = {
+  en: {
+    pageTitle: "System Logs",
+    pageSubtitle: "Backend real-time log streams (planner / worker / database / proxy ...)",
+    filterPlaceholder: "Filter (text / tag)...",
+    all: "All",
+    paused: "Paused",
+    pause: "Pause",
+    clear: "Clear",
+    lines: "lines",
+    warnings: "warnings",
+    errors: "errors",
+    loadOlder: "Load older history",
+    loadingOlder: "Loading...",
+    noLogs: "No logs matching criteria",
+  },
+  pt: {
+    pageTitle: "Logs do Sistema",
+    pageSubtitle: "Fluxo de logs em tempo real (planejador / executores / banco de dados / proxy ...)",
+    filterPlaceholder: "Filtrar (texto / tag)...",
+    all: "Todos",
+    paused: "Pausado",
+    pause: "Pausar",
+    clear: "Limpar",
+    lines: "linhas",
+    warnings: "avisos",
+    errors: "erros",
+    loadOlder: "Carregar histórico anterior",
+    loadingOlder: "Carregando...",
+    noLogs: "Nenhum log correspondente aos critérios",
+  },
+  zh: {
+    pageTitle: "系统日志",
+    pageSubtitle: "后端实时日志流(planner / worker / 数据库 / 流量 …)",
+    filterPlaceholder: "过滤(文本 / tag)…",
+    all: "全部",
+    paused: "已暂停",
+    pause: "暂停",
+    clear: "清空",
+    lines: "行",
+    warnings: "警告",
+    errors: "错误",
+    loadOlder: "加载更早历史",
+    loadingOlder: "加载中…",
+    noLogs: "暂无符合条件的日志",
+  },
 };
 
-function fmtTime(ts: string) {
-  const d = new Date(ts);
-  if (isNaN(d.getTime())) return "";
-  const p = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
-}
-
 export default function LogsPage() {
-  const [lines, setLines] = React.useState<LogLine[]>([]);
-  const [q, setQ] = React.useState("");
-  const [level, setLevel] = React.useState<"all" | LogLine["level"]>("all");
-  const [paused, setPaused] = React.useState(false);
-  const [loadingHistory, setLoadingHistory] = React.useState(false);
-  const [hasMore, setHasMore] = React.useState(false);
-  const bottom = React.useRef<HTMLDivElement>(null);
-  const stick = React.useRef(true);
-  const pausedRef = React.useRef(false);
-  pausedRef.current = paused;
+  const { locale } = useI18n();
+  const t = I18N[locale] ?? I18N.en;
 
-  // Minimum db_id seen — used as the cursor for loading older history.
+  const [lines, setLines] = React.useState<LogLine[]>(() => (MOCK ? MOCK_LOGS : []));
+  const [level, setLevel] = React.useState<"all" | LogLine["level"]>("all");
+  const [q, setQ] = React.useState("");
+  const [paused, setPaused] = React.useState(false);
+  const [hasMore, setHasMore] = React.useState(true);
+  const [loadingHistory, setLoadingHistory] = React.useState(false);
+  const stick = React.useRef(true);
+  const bottom = React.useRef<HTMLDivElement>(null);
+
   const minDbId = React.useMemo(() => {
     let min = 0;
     for (const l of lines) {
@@ -57,48 +131,39 @@ export default function LogsPage() {
     return min;
   }, [lines]);
 
-  // Live tail via SSE. on connect, replays whatever is in the ring (includes
-  // DB-restored history from the last 100 rows written before restart).
   React.useEffect(() => {
-    if (MOCK) {
-      setLines(MOCK_LOGS);
-      return;
-    }
-    const es = new EventSource(sseUrl("/api/logs/stream?since=0"));
-    es.onmessage = (e) => {
-      if (pausedRef.current) return;
+    if (MOCK) return;
+    const es = new EventSource(sseUrl("/api/logs/stream"));
+    es.onmessage = (ev) => {
       try {
-        const l = JSON.parse(e.data) as LogLine;
-        setLines((prev) => (prev.some((x) => x.seq === l.seq) ? prev : [...prev, l].slice(-3000)));
+        const item = JSON.parse(ev.data) as LogLine;
+        setLines((prev) => {
+          if (prev.length && prev[prev.length - 1].seq === item.seq) return prev;
+          const next = [...prev, item];
+          return next.length > 2000 ? next.slice(-2000) : next;
+        });
       } catch {
-        /* ignore malformed frame */
+        // ignore parse error
       }
     };
     return () => es.close();
   }, []);
 
-  // Mark "has more" once we have any db_id in view.
-  React.useEffect(() => {
-    if (minDbId > 1) setHasMore(true);
-  }, [minDbId]);
-
   async function loadOlderHistory() {
     if (loadingHistory) return;
     setLoadingHistory(true);
     try {
-      const params = minDbId > 0 ? `?before=${minDbId}&limit=200` : `?limit=200`;
+      const params = minDbId > 0 ? `?before=${minDbId}&limit=200` : "?limit=200";
       const res = await fetch(`/api/logs/history${params}`);
       if (!res.ok) return;
-      const data = await res.json() as { items: LogLine[]; has_more: boolean };
+      const data = (await res.json()) as { items: LogLine[]; has_more: boolean };
       if (data.items?.length) {
-        // Assign synthetic seq numbers below current minimum to keep dedup working.
         setLines((prev) => {
           const minSeq = prev.reduce((m, l) => Math.min(m, l.seq ?? 0), 0);
           const older = data.items.map((l, i) => ({
             ...l,
             seq: minSeq - data.items.length + i,
           }));
-          // Prepend, dedup by db_id, cap at 5000.
           const merged = [...older, ...prev];
           const seen = new Set<number>();
           const deduped = merged.filter((l) => {
@@ -126,12 +191,14 @@ export default function LogsPage() {
   }, [lines, q, level]);
 
   React.useEffect(() => {
-    if (stick.current && !paused) bottom.current?.scrollIntoView();
+    if (filtered.length >= 0 && stick.current && !paused) {
+      bottom.current?.scrollIntoView();
+    }
   }, [filtered, paused]);
 
   const counts = React.useMemo(() => {
-    let warn = 0,
-      error = 0;
+    let warn = 0;
+    let error = 0;
     for (const l of lines) {
       if (l.level === "warn") warn++;
       else if (l.level === "error") error++;
@@ -142,13 +209,13 @@ export default function LogsPage() {
   return (
     <div className="flex flex-1 flex-col gap-3">
       <div>
-        <h1 className="text-xl font-semibold tracking-tight">系统日志</h1>
-        <p className="text-muted-foreground text-sm">后端实时日志流(planner / worker / 数据库 / 流量 …)</p>
+        <h1 className="text-xl font-semibold tracking-tight">{t.pageTitle}</h1>
+        <p className="text-muted-foreground text-sm">{t.pageSubtitle}</p>
       </div>
       <div className="flex flex-1 flex-col gap-3">
         <div className="flex flex-wrap items-center gap-2">
           <Input
-            placeholder="过滤(文本 / tag)…"
+            placeholder={t.filterPlaceholder}
             value={q}
             onChange={(e) => setQ(e.target.value)}
             className="h-8 max-w-xs"
@@ -162,7 +229,7 @@ export default function LogsPage() {
                 className="h-8"
                 onClick={() => setLevel(lv)}
               >
-                {lv === "all" ? "全部" : lv}
+                {lv === "all" ? t.all : lv}
               </Button>
             ))}
           </div>
@@ -172,15 +239,20 @@ export default function LogsPage() {
             className="h-8"
             onClick={() => setPaused((p) => !p)}
           >
-            {paused ? "已暂停" : "暂停"}
+            {paused ? t.paused : t.pause}
           </Button>
           <Button size="sm" variant="outline" className="h-8" onClick={() => setLines([])}>
-            清空
+            {t.clear}
           </Button>
           <span className="ml-auto text-xs text-muted-foreground">
-            {counts.total} 行 ·{" "}
-            <span className="text-amber-600 dark:text-amber-400">{counts.warn} 警告</span> ·{" "}
-            <span className="text-red-600 dark:text-red-400">{counts.error} 错误</span>
+            {counts.total} {t.lines} ·{" "}
+            <span className="text-amber-600 dark:text-amber-400">
+              {counts.warn} {t.warnings}
+            </span>{" "}
+            ·{" "}
+            <span className="text-red-600 dark:text-red-400">
+              {counts.error} {t.errors}
+            </span>
           </span>
         </div>
 
@@ -195,35 +267,24 @@ export default function LogsPage() {
             <div className="flex justify-center py-2">
               <Button
                 size="sm"
-                variant="outline"
-                className="h-7 text-xs"
-                disabled={loadingHistory}
+                variant="ghost"
+                className="text-xs text-muted-foreground"
                 onClick={loadOlderHistory}
+                disabled={loadingHistory}
               >
-                {loadingHistory ? "加载中…" : "加载更早日志"}
+                {loadingHistory ? t.loadingOlder : t.loadOlder}
               </Button>
             </div>
           )}
-          {filtered.length === 0 ? (
-            <p className="py-10 text-center text-muted-foreground">暂无日志。</p>
-          ) : (
-            filtered.map((l) => {
-              const body =
-                l.tag && l.text.startsWith("[" + l.tag + "]")
-                  ? l.text.slice(l.tag.length + 2).trimStart()
-                  : l.text;
-              return (
-                <div key={l.seq} className="flex items-start gap-2 px-1 py-0.5 hover:bg-muted/40">
-                  <span className={cn("mt-1.5 size-1.5 shrink-0 rounded-full", levelDot[l.level])} />
-                  <span className="shrink-0 tabular-nums text-muted-foreground">{fmtTime(l.ts)}</span>
-                  {l.tag && (
-                    <span className="shrink-0 rounded bg-muted px-1 text-[10px] text-foreground/70">{l.tag}</span>
-                  )}
-                  <span className={cn("min-w-0 whitespace-pre-wrap break-words", levelTone[l.level])}>{body}</span>
-                </div>
-              );
-            })
-          )}
+          {filtered.length === 0 && <p className="text-muted-foreground py-6 text-center text-xs">{t.noLogs}</p>}
+          {filtered.map((l) => (
+            <div key={l.db_id ?? l.seq} className="flex gap-2">
+              <span className="text-muted-foreground/60 select-none">{l.ts ? l.ts.slice(11, 19) : "--:--:--"}</span>
+              <span className={cn("w-10 font-bold uppercase", levelTone[l.level])}>{l.level}</span>
+              <span className="text-muted-foreground w-20 truncate">[{l.tag}]</span>
+              <span className="flex-1 whitespace-pre-wrap break-all">{l.text}</span>
+            </div>
+          ))}
           <div ref={bottom} />
         </div>
       </div>

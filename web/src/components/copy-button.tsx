@@ -6,12 +6,31 @@ import { CheckIcon, CopyIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
+import { useI18n } from "@/lib/i18n/i18n-context";
 import { cn, copyText } from "@/lib/utils";
 
+const I18N = {
+  en: {
+    label: "Copy",
+    successMessage: "Copied",
+    failureMessage: "Copy failed, please select and copy text manually",
+  },
+  pt: {
+    label: "Copiar",
+    successMessage: "Copiado",
+    failureMessage: "Falha ao copiar, selecione e copie o texto manualmente",
+  },
+  zh: {
+    label: "复制",
+    successMessage: "已复制",
+    failureMessage: "复制失败，请手动选择文本复制",
+  },
+};
+
 type CopyButtonProps = {
-  // 要复制的文本;为空则按钮禁用。
+  // Text to copy; button disabled if null/empty.
   text: string | null | undefined;
-  // 复制成功后的 toast 文案,默认「已复制」。
+  // Custom toast message on copy success.
   successMessage?: string;
   label?: React.ReactNode;
   size?: React.ComponentProps<typeof Button>["size"];
@@ -19,16 +38,18 @@ type CopyButtonProps = {
   className?: string;
 };
 
-// CopyButton 统一的「复制到剪贴板」按钮:内置成功/失败反馈,并在 HTTP 非安全上下文
-// 下自动降级(见 copyText)。
+// CopyButton: uniform copy-to-clipboard button with success/error toasts.
 export function CopyButton({
   text,
-  successMessage = "已复制",
-  label = "复制",
+  successMessage,
+  label,
   size = "sm",
   variant = "outline",
   className,
 }: CopyButtonProps) {
+  const { locale } = useI18n();
+  const t = I18N[locale] ?? I18N.en;
+
   const [copied, setCopied] = React.useState(false);
   const timer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -43,25 +64,18 @@ export function CopyButton({
     const ok = await copyText(text);
     if (ok) {
       setCopied(true);
-      toast.success(successMessage);
+      toast.success(successMessage ?? t.successMessage);
       if (timer.current) clearTimeout(timer.current);
       timer.current = setTimeout(() => setCopied(false), 1500);
     } else {
-      toast.error("复制失败，请手动选择文本复制");
+      toast.error(t.failureMessage);
     }
   }
 
   return (
-    <Button
-      type="button"
-      size={size}
-      variant={variant}
-      className={cn(className)}
-      disabled={!text}
-      onClick={handleCopy}
-    >
+    <Button type="button" size={size} variant={variant} className={cn(className)} disabled={!text} onClick={handleCopy}>
       {copied ? <CheckIcon /> : <CopyIcon />}
-      {label}
+      {label ?? t.label}
     </Button>
   );
 }

@@ -13,9 +13,25 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { auth } from "@/lib/auth";
+import { useI18n } from "@/lib/i18n/i18n-context";
 import { cn, getInitials } from "@/lib/utils";
 
 import { ChangePasswordDialog } from "./change-password-dialog";
+
+const I18N = {
+  en: {
+    changePassword: "Change Password",
+    logout: "Log Out",
+  },
+  pt: {
+    changePassword: "Alterar Senha",
+    logout: "Sair",
+  },
+  zh: {
+    changePassword: "修改密码",
+    logout: "退出登录",
+  },
+};
 
 export function AccountSwitcher({
   users,
@@ -28,6 +44,9 @@ export function AccountSwitcher({
     readonly role: string;
   }>;
 }) {
+  const { locale } = useI18n();
+  const t = I18N[locale] ?? I18N.en;
+
   const [activeUser, setActiveUser] = useState(users[0]);
   const [pwOpen, setPwOpen] = useState(false);
 
@@ -80,11 +99,11 @@ export function AccountSwitcher({
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => setPwOpen(true)}>
             <KeyRound />
-            修改密码
+            {t.changePassword}
           </DropdownMenuItem>
           <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">
             <LogOut />
-            退出登录
+            {t.logout}
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>

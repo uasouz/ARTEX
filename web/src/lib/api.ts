@@ -825,8 +825,7 @@ export const api = {
   // 渠道是多实例资源（同一类型可配多个机器人、各有过滤规则），因此独立成组，
   // 不塞进扁平的 settings 键值里。
   notifyMeta: () => get<NotificationMeta>(`/notify/meta`),
-  notifyChannels: () =>
-    get<{ channels: NotificationChannel[] }>(`/notify/channels`).then((r) => arr(r.channels)),
+  notifyChannels: () => get<{ channels: NotificationChannel[] }>(`/notify/channels`).then((r) => arr(r.channels)),
   notifyCreateChannel: (payload: {
     name: string;
     kind: string;
@@ -863,10 +862,14 @@ export const api = {
     ).then((r) => ({ ...r, deliveries: arr(r.deliveries) }));
   },
   notifyRetryDelivery: (id: number) => post<{ ok: boolean }>(`/notify/deliveries/${id}/retry`),
-  report: async (task?: string) => {
+  report: async (task?: string, locale?: string) => {
     if (MOCK) return mockReport(task);
     const token = getToken();
-    const r = await fetch(`/api/report${tq(task)}`, {
+    const q = new URLSearchParams();
+    if (task) q.set("task", task);
+    if (locale) q.set("locale", locale);
+    const qs = q.toString() ? `?${q.toString()}` : "";
+    const r = await fetch(`/api/report${qs}`, {
       headers: token ? { Authorization: `Bearer ${token}` } : {},
     });
     if (!r.ok) throw new Error(`report: ${r.status}`);

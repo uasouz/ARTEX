@@ -40,6 +40,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { api } from "@/lib/api";
 import { parseCompanyScopeText } from "@/lib/company-scope";
+import { useI18n } from "@/lib/i18n/i18n-context";
 import { taskAssetSourceLabel } from "@/lib/task-assets";
 import type { Asset, NewAssetType } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -56,14 +57,36 @@ const METHOD_COLOR: Record<string, string> = {
   PUT: "bg-amber-100 text-amber-700",
 };
 
-const TABS: { key: NewAssetType; label: string; icon: LucideIcon }[] = [
-  { key: "root_domain", label: "根域名", icon: GlobeIcon },
-  { key: "ip", label: "IP", icon: NetworkIcon },
-  { key: "subdomain", label: "子域名", icon: GlobeIcon },
-  { key: "app", label: "应用", icon: SmartphoneIcon },
-  { key: "service", label: "服务", icon: LayoutTemplateIcon },
-  { key: "endpoint", label: "接口", icon: LinkIcon },
-];
+function getTabs(locale: string): { key: NewAssetType; label: string; icon: LucideIcon }[] {
+  if (locale === "pt") {
+    return [
+      { key: "root_domain", label: "Domínios raiz", icon: GlobeIcon },
+      { key: "ip", label: "IP", icon: NetworkIcon },
+      { key: "subdomain", label: "Subdomínios", icon: GlobeIcon },
+      { key: "app", label: "Aplicações", icon: SmartphoneIcon },
+      { key: "service", label: "Serviços", icon: LayoutTemplateIcon },
+      { key: "endpoint", label: "Endpoints", icon: LinkIcon },
+    ];
+  }
+  if (locale === "zh") {
+    return [
+      { key: "root_domain", label: "根域名", icon: GlobeIcon },
+      { key: "ip", label: "IP", icon: NetworkIcon },
+      { key: "subdomain", label: "子域名", icon: GlobeIcon },
+      { key: "app", label: "应用", icon: SmartphoneIcon },
+      { key: "service", label: "服务", icon: LayoutTemplateIcon },
+      { key: "endpoint", label: "接口", icon: LinkIcon },
+    ];
+  }
+  return [
+    { key: "root_domain", label: "Root Domains", icon: GlobeIcon },
+    { key: "ip", label: "IP", icon: NetworkIcon },
+    { key: "subdomain", label: "Subdomains", icon: GlobeIcon },
+    { key: "app", label: "Apps", icon: SmartphoneIcon },
+    { key: "service", label: "Services", icon: LayoutTemplateIcon },
+    { key: "endpoint", label: "Endpoints", icon: LinkIcon },
+  ];
+}
 
 function firstText(values: Array<string | undefined>, fallback: string): string {
   return values.find((value) => value?.trim()) ?? fallback;
@@ -131,22 +154,31 @@ function Chips({ items, mono }: { items: string[]; mono?: boolean }) {
   );
 }
 
-function SourceCell({ asset }: { asset: Asset }) {
+function SourceCell({
+  asset,
+  legacyFallback,
+  sourceNodeLabel,
+}: {
+  asset: Asset;
+  legacyFallback: string;
+  sourceNodeLabel: (id: string | number) => string;
+}) {
+  const { locale } = useI18n();
   const source = firstText([asset.task_source], "legacy");
-  const summary = firstText([asset.task_source_summary], "由历史任务资产关联迁移，暂无更详细来源说明");
+  const summary = firstText([asset.task_source_summary], legacyFallback);
   return (
     <Tooltip>
       <TooltipTrigger asChild>
         <Badge variant="outline" className="max-w-28 shrink-0 font-normal">
-          <span className="truncate">{taskAssetSourceLabel(source)}</span>
+          <span className="truncate">{taskAssetSourceLabel(source, locale)}</span>
         </Badge>
       </TooltipTrigger>
       <TooltipContent side="left" align="start" className="max-w-sm">
         <div className="flex min-w-0 flex-col gap-1">
-          <span className="font-medium">{taskAssetSourceLabel(source)}</span>
+          <span className="font-medium">{taskAssetSourceLabel(source, locale)}</span>
           <span className="[overflow-wrap:anywhere]">{summary}</span>
           {asset.task_source_node_id ? (
-            <span className="font-mono opacity-80">来源节点 #{asset.task_source_node_id}</span>
+            <span className="font-mono opacity-80">{sourceNodeLabel(asset.task_source_node_id)}</span>
           ) : null}
         </div>
       </TooltipContent>
@@ -163,6 +195,10 @@ function AssetCard({
   page,
   size,
   total,
+  emptyLabel,
+  perPageLabel,
+  prevPageLabel,
+  nextPageLabel,
 }: {
   children: React.ReactNode;
   cols: string[];
@@ -172,6 +208,10 @@ function AssetCard({
   page: number;
   size: number;
   total: number;
+  emptyLabel: string;
+  perPageLabel: string;
+  prevPageLabel: string;
+  nextPageLabel: string;
 }) {
   const rows = React.Children.toArray(children);
   const pageCount = Math.max(1, Math.ceil(total / size));
@@ -192,7 +232,7 @@ function AssetCard({
     tableRows = (
       <TableRow>
         <TableCell colSpan={cols.length} className="py-10 text-center text-muted-foreground text-sm">
-          当前分类暂无测试资产
+          {emptyLabel}
         </TableCell>
       </TableRow>
     );
@@ -220,14 +260,14 @@ function AssetCard({
               onPage(0);
             }}
           >
-            <SelectTrigger size="sm" className="w-24">
+            <SelectTrigger size="sm" className="w-28">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
               <SelectGroup>
                 {PAGE_SIZES.map((value) => (
                   <SelectItem key={value} value={String(value)}>
-                    {value} / 页
+                    {value} {perPageLabel}
                   </SelectItem>
                 ))}
               </SelectGroup>
@@ -243,7 +283,7 @@ function AssetCard({
                 size="icon-sm"
                 disabled={page <= 0}
                 onClick={() => onPage(Math.max(0, page - 1))}
-                aria-label="上一页"
+                aria-label={prevPageLabel}
               >
                 <ChevronLeftIcon />
               </Button>
@@ -255,7 +295,7 @@ function AssetCard({
                 size="icon-sm"
                 disabled={page + 1 >= pageCount}
                 onClick={() => onPage(Math.min(pageCount - 1, page + 1))}
-                aria-label="下一页"
+                aria-label={nextPageLabel}
               >
                 <ChevronRightIcon />
               </Button>
@@ -272,11 +312,22 @@ function AddTaskAssetsSheet({
   onOpenChange,
   open,
   taskId,
+  labels,
 }: {
   onAttached: () => void;
   onOpenChange: (open: boolean) => void;
   open: boolean;
   taskId: string;
+  labels: {
+    addTitle: string;
+    addDesc: string;
+    editorLabel: string;
+    editorDesc: string;
+    cancel: string;
+    submit: (count: number | string) => string;
+    successToast: (req: number, total: number) => string;
+    failedToast: (err: string) => string;
+  };
 }) {
   const [scopeText, setScopeText] = React.useState("");
   const [saving, setSaving] = React.useState(false);
@@ -293,11 +344,11 @@ function AddTaskAssetsSheet({
     try {
       const result = await api.registerTaskAssetScopes(taskId, parsedScope.rules);
       const assetSummary = result.assets_linked + result.assets_existing;
-      toast.success(`已登记 ${result.requested} 条范围，关联 ${assetSummary} 项域名/IP 资产`);
+      toast.success(labels.successToast(result.requested, assetSummary));
       onAttached();
       onOpenChange(false);
     } catch (reason) {
-      toast.error(`新增失败：${String((reason as Error)?.message ?? reason)}`);
+      toast.error(labels.failedToast(reason instanceof Error ? reason.message : String(reason)));
     } finally {
       setSaving(false);
     }
@@ -307,10 +358,8 @@ function AddTaskAssetsSheet({
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full sm:max-w-xl">
         <SheetHeader>
-          <SheetTitle>新增测试资产</SheetTitle>
-          <SheetDescription>
-            直接填写测试范围。域名和 IP 会创建或复用全局资产；CIDR、ICP 和关键词作为 Agent 范围上下文。
-          </SheetDescription>
+          <SheetTitle>{labels.addTitle}</SheetTitle>
+          <SheetDescription>{labels.addDesc}</SheetDescription>
         </SheetHeader>
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4">
           <ScopeTextEditor
@@ -318,20 +367,20 @@ function AddTaskAssetsSheet({
             value={scopeText}
             onValueChange={setScopeText}
             parsed={parsedScope}
-            label="测试资产与范围"
-            description="每行一条，自动识别域名、IP、CIDR、ICP 备案和关键词。"
+            label={labels.editorLabel}
+            description={labels.editorDesc}
           />
         </div>
         <SheetFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
-            取消
+            {labels.cancel}
           </Button>
           <Button
             onClick={() => void attach()}
             disabled={saving || parsedScope.rules.length === 0 || parsedScope.errors.length > 0}
           >
             {saving ? <Spinner data-icon="inline-start" /> : <PlusIcon data-icon="inline-start" />}
-            登记 {parsedScope.rules.length > 0 ? parsedScope.rules.length : ""} 条
+            {labels.submit(parsedScope.rules.length > 0 ? parsedScope.rules.length : "")}
           </Button>
         </SheetFooter>
       </SheetContent>
@@ -340,6 +389,7 @@ function AddTaskAssetsSheet({
 }
 
 export function AssetsTab({ taskId }: { taskId: string }) {
+  const { locale } = useI18n();
   const [rows, setRows] = React.useState<Asset[]>([]);
   const [total, setTotal] = React.useState(0);
   const [counts, setCounts] = React.useState<Record<string, number>>({});
@@ -357,21 +407,150 @@ export function AssetsTab({ taskId }: { taskId: string }) {
   const assetsRequestRef = React.useRef(0);
   const dslMode = query.trim() !== "";
 
+  const labels = React.useMemo(() => {
+    if (locale === "pt") {
+      return {
+        title: "Ativos de Teste",
+        subtitle: (total: number) => `Esta tarefa possui ${total} ativos vinculados`,
+        addBtn: "Adicionar ativos de teste",
+        emptyList: "Nenhum ativo de teste nesta categoria",
+        perPage: "/ pág.",
+        prevPage: "Página anterior",
+        nextPage: "Próxima página",
+        removeTitle: "Remover da tarefa atual?",
+        removeDesc: (label: string) =>
+          `Remover "${label}" dos ativos de teste da tarefa atual. Ativos globais, tráfego correlato e histórico de exploração serão preservados.`,
+        cancel: "Cancelar",
+        removeConfirm: "Remover",
+        removedToast: (label: string) => `Removido "${label}" da tarefa atual`,
+        removeFailed: "Falha ao remover: ",
+        removeBtnTitle: "Remover da tarefa",
+        removeBtnAria: (label: string) => `Remover ativo ${label} da tarefa`,
+        loadFailed: "Falha ao carregar ativos da tarefa: ",
+        legacySource: "Migrado de associações históricas, sem descrição detalhada de origem",
+        sourceNode: (id: string | number) => `Nó de origem #${id}`,
+        addTitle: "Adicionar Ativos de Teste",
+        addDesc:
+          "Informe os escopos de teste diretamente. Domínios e IPs criam ou reutilizam ativos globais; CIDRs e palavras-chave atuam como contexto de escopo para os agentes.",
+        editorLabel: "Ativos e Escopos de Teste",
+        editorDesc: "Uma entrada por linha; detecção automática de domínios, IPs, CIDRs e palavras-chave.",
+        submitAdd: (c: number | string) => `Registrar ${c}`,
+        successAdd: (req: number, sum: number) =>
+          `Registradas ${req} regras de escopo, vinculados ${sum} ativos de domínio/IP`,
+        failAdd: (err: string) => `Falha ao adicionar: ${err}`,
+        colsDomain: ["Domínio", "Registro / ICP", "Origem", "Ações"],
+        colsIp: ["IP", "Segmento C", "Domínios vinculados", "Portas abertas", "Origem", "Ações"],
+        colsSubdomain: ["Domínio", "Domínio raiz", "Tipo de registro", "Valor do registro", "Origem", "Ações"],
+        colsApp: ["Aplicação", "URL", "Categoria", "Título", "Impressão digital", "Origem", "Ações"],
+        colsService: [
+          "Endereço / Serviço",
+          "Código de status",
+          "Título",
+          "Tamanho do conteúdo",
+          "Impressão digital",
+          "Autenticação",
+          "Origem",
+          "Ações",
+        ],
+        colsEndpoint: ["Método", "URL completa", "Parâmetros", "Origem", "Ações"],
+      };
+    }
+    if (locale === "zh") {
+      return {
+        title: "测试资产",
+        subtitle: (total: number) => `当前任务共关联 ${total} 项资产`,
+        addBtn: "新增测试资产",
+        emptyList: "当前分类暂无测试资产",
+        perPage: "/ 页",
+        prevPage: "上一页",
+        nextPage: "下一页",
+        removeTitle: "移出当前任务？",
+        removeDesc: (label: string) =>
+          `将“${label}”从当前任务的测试资产中移出。全局资产、关联流量和历史黑板锚点会继续保留。`,
+        cancel: "取消",
+        removeConfirm: "移出",
+        removedToast: (label: string) => `已将 ${label} 移出当前任务`,
+        removeFailed: "移出失败：",
+        removeBtnTitle: "移出任务",
+        removeBtnAria: (label: string) => `将资产 ${label} 移出任务`,
+        loadFailed: "加载任务资产失败：",
+        legacySource: "由历史任务资产关联迁移，暂无更详细来源说明",
+        sourceNode: (id: string | number) => `来源节点 #${id}`,
+        addTitle: "新增测试资产",
+        addDesc: "直接填写测试范围。域名和 IP 会创建或复用全局资产；CIDR、ICP 和关键词作为 Agent 范围上下文。",
+        editorLabel: "测试资产与范围",
+        editorDesc: "每行一条，自动识别域名、IP、CIDR、ICP 备案和关键词。",
+        submitAdd: (c: number | string) => `登记 ${c} 条`,
+        successAdd: (req: number, sum: number) => `已登记 ${req} 条范围，关联 ${sum} 项域名/IP 资产`,
+        failAdd: (err: string) => `新增失败：${err}`,
+        colsDomain: ["域名", "ICP 备案", "来源", "操作"],
+        colsIp: ["IP", "C段", "绑定域名", "开放端口", "来源", "操作"],
+        colsSubdomain: ["域名", "根域名", "解析类型", "解析值", "来源", "操作"],
+        colsApp: ["应用", "地址", "分类", "标题", "指纹", "来源", "操作"],
+        colsService: ["地址 / 服务", "状态码", "标题", "响应长度", "指纹", "认证", "来源", "操作"],
+        colsEndpoint: ["方法", "完整地址", "参数", "来源", "操作"],
+      };
+    }
+    return {
+      title: "Test Assets",
+      subtitle: (total: number) => `Current task has ${total} linked assets`,
+      addBtn: "Add Test Assets",
+      emptyList: "No test assets in this category",
+      perPage: "/ page",
+      prevPage: "Previous page",
+      nextPage: "Next page",
+      removeTitle: "Remove from current task?",
+      removeDesc: (label: string) =>
+        `Remove "${label}" from testing assets of the current task. Global assets, related traffic, and exploration anchors will be preserved.`,
+      cancel: "Cancel",
+      removeConfirm: "Remove",
+      removedToast: (label: string) => `Removed ${label} from current task`,
+      removeFailed: "Failed to remove: ",
+      removeBtnTitle: "Remove from task",
+      removeBtnAria: (label: string) => `Remove asset ${label} from task`,
+      loadFailed: "Failed to load task assets: ",
+      legacySource: "Migrated from historical associations, no detailed source description",
+      sourceNode: (id: string | number) => `Source node #${id}`,
+      addTitle: "Add Test Assets",
+      addDesc:
+        "Enter testing scopes directly. Domains and IPs create or reuse global assets; CIDR, ICP, and keywords serve as agent scope context.",
+      editorLabel: "Test Assets and Scopes",
+      editorDesc: "One per line; automatically detects domains, IPs, CIDRs, and keywords.",
+      submitAdd: (c: number | string) => `Register ${c}`,
+      successAdd: (req: number, sum: number) => `Registered ${req} scope rules, linked ${sum} domain/IP assets`,
+      failAdd: (err: string) => `Failed to add: ${err}`,
+      colsDomain: ["Domain", "Registration / ICP", "Source", "Actions"],
+      colsIp: ["IP", "C-Segment", "Bound Domains", "Open Ports", "Source", "Actions"],
+      colsSubdomain: ["Domain", "Root Domain", "Record Type", "Record Value", "Source", "Actions"],
+      colsApp: ["Application", "URL", "Category", "Title", "Fingerprint", "Source", "Actions"],
+      colsService: [
+        "Address / Service",
+        "Status Code",
+        "Title",
+        "Content Length",
+        "Fingerprint",
+        "Auth",
+        "Source",
+        "Actions",
+      ],
+      colsEndpoint: ["Method", "Full URL", "Parameters", "Source", "Actions"],
+    };
+  }, [locale]);
+
+  const tabs = React.useMemo(() => getTabs(locale), [locale]);
+
   React.useEffect(() => {
     setPage(0);
     setRows([]);
     setLoaded(false);
   }, []);
 
-  // Switching type tabs resets the search (DSL fields differ per type; matches
-  // the global asset view).
   // biome-ignore lint/correctness/useExhaustiveDependencies: tab changes intentionally reset tab-local controls.
   React.useEffect(() => {
     setQuery("");
     setDslError("");
   }, [tab]);
 
-  // Query / tab / page-size changes restart server pagination.
   // biome-ignore lint/correctness/useExhaustiveDependencies: these controls intentionally reset server pagination.
   React.useEffect(() => setPage(0), [tab, size, query]);
 
@@ -383,8 +562,6 @@ export function AssetsTab({ taskId }: { taskId: string }) {
     const load = async () => {
       setLoading(true);
       try {
-        // The search always stays within this task's assets: taskAssets and
-        // searchTaskAssets both pin task_id server-side.
         const [current, nextCounts] = await Promise.all([
           dsl
             ? api.searchTaskAssets(taskId, dsl, tab, size, page * size)
@@ -398,13 +575,13 @@ export function AssetsTab({ taskId }: { taskId: string }) {
         setDslError("");
       } catch (reason) {
         if (!active || assetsRequestRef.current !== request) return;
-        const message = String((reason as Error)?.message ?? reason);
+        const message = reason instanceof Error ? reason.message : String(reason);
         if (dsl) {
           setDslError(message);
           setRows([]);
           setTotal(0);
         } else {
-          toast.error(`加载任务资产失败：${message}`);
+          toast.error(`${labels.loadFailed}${message}`);
         }
       } finally {
         if (active && assetsRequestRef.current === request) {
@@ -413,7 +590,6 @@ export function AssetsTab({ taskId }: { taskId: string }) {
         }
       }
     };
-    // Debounce DSL keystrokes; plain (re)loads and polling run immediately.
     const debounce = setTimeout(() => void load(), dsl ? 400 : 0);
     const timer = setInterval(() => void load(), 10_000);
     return () => {
@@ -421,7 +597,7 @@ export function AssetsTab({ taskId }: { taskId: string }) {
       clearTimeout(debounce);
       clearInterval(timer);
     };
-  }, [page, query, refreshKey, size, tab, taskId]);
+  }, [page, query, refreshKey, size, tab, taskId, labels.loadFailed]);
 
   React.useEffect(() => {
     const maxPage = Math.max(0, Math.ceil(total / size) - 1);
@@ -438,11 +614,11 @@ export function AssetsTab({ taskId }: { taskId: string }) {
     setRemoving(true);
     try {
       await api.detachTaskAsset(taskId, removeTarget.id);
-      toast.success(`已将 ${assetLabel(removeTarget)} 移出当前任务`);
+      toast.success(labels.removedToast(assetLabel(removeTarget)));
       setRemoveTarget(null);
       refresh();
     } catch (reason) {
-      toast.error(`移出失败：${String((reason as Error)?.message ?? reason)}`);
+      toast.error(`${labels.removeFailed}${reason instanceof Error ? reason.message : String(reason)}`);
     } finally {
       setRemoving(false);
     }
@@ -453,15 +629,26 @@ export function AssetsTab({ taskId }: { taskId: string }) {
       variant="ghost"
       size="icon-sm"
       onClick={() => setRemoveTarget(asset)}
-      aria-label={`将资产 ${assetLabel(asset)} 移出任务`}
-      title="移出任务"
+      aria-label={labels.removeBtnAria(assetLabel(asset))}
+      title={labels.removeBtnTitle}
     >
       <Trash2Icon />
     </Button>
   );
 
-  const commonCardProps = { loaded, onPage: setPage, onSize: setSize, page, size, total };
-  const totalAll = TABS.reduce((sum, item) => sum + (counts[item.key] ?? 0), 0);
+  const commonCardProps = {
+    loaded,
+    onPage: setPage,
+    onSize: setSize,
+    page,
+    size,
+    total,
+    emptyLabel: labels.emptyList,
+    perPageLabel: labels.perPage,
+    prevPageLabel: labels.prevPage,
+    nextPageLabel: labels.nextPage,
+  };
+  const totalAll = tabs.reduce((sum, item) => sum + (counts[item.key] ?? 0), 0);
 
   const searchBox = (
     <AssetDslSearch
@@ -477,12 +664,12 @@ export function AssetsTab({ taskId }: { taskId: string }) {
     <div className="flex min-h-0 flex-1 flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="font-medium text-sm">测试资产</h2>
-          <p className="text-muted-foreground text-xs">当前任务共关联 {totalAll} 项资产</p>
+          <h2 className="font-medium text-sm">{labels.title}</h2>
+          <p className="text-muted-foreground text-xs">{labels.subtitle(totalAll)}</p>
         </div>
         <Button size="sm" onClick={() => setAddOpen(true)}>
           <PlusIcon data-icon="inline-start" />
-          新增测试资产
+          {labels.addBtn}
         </Button>
       </div>
 
@@ -493,7 +680,7 @@ export function AssetsTab({ taskId }: { taskId: string }) {
       >
         <div className="overflow-x-auto overflow-y-hidden">
           <TabsList className="w-max">
-            {TABS.map((item) => (
+            {tabs.map((item) => (
               <TabsTrigger key={item.key} value={item.key}>
                 <item.icon data-icon="inline-start" />
                 {item.label}
@@ -506,13 +693,13 @@ export function AssetsTab({ taskId }: { taskId: string }) {
         {searchBox}
 
         <TabsContent value="root_domain" className="mt-0 flex min-h-0 flex-1 flex-col">
-          <AssetCard cols={["域名", "ICP 备案", "来源", "操作"]} {...commonCardProps}>
+          <AssetCard cols={labels.colsDomain} {...commonCardProps}>
             {rows.map((asset) => (
               <TableRow key={asset.id}>
                 <TableCell className="font-medium font-mono text-xs">{asset.domain}</TableCell>
                 <TableCell className="text-xs">{asset.icp || "—"}</TableCell>
                 <TableCell>
-                  <SourceCell asset={asset} />
+                  <SourceCell asset={asset} legacyFallback={labels.legacySource} sourceNodeLabel={labels.sourceNode} />
                 </TableCell>
                 <TableCell className="w-16">{removeButton(asset)}</TableCell>
               </TableRow>
@@ -521,7 +708,7 @@ export function AssetsTab({ taskId }: { taskId: string }) {
         </TabsContent>
 
         <TabsContent value="ip" className="mt-0 flex min-h-0 flex-1 flex-col">
-          <AssetCard cols={["IP", "C段", "绑定域名", "开放端口", "来源", "操作"]} {...commonCardProps}>
+          <AssetCard cols={labels.colsIp} {...commonCardProps}>
             {rows.map((asset) => (
               <TableRow key={asset.id}>
                 <TableCell className="font-medium font-mono text-xs">{asset.ip}</TableCell>
@@ -538,7 +725,7 @@ export function AssetsTab({ taskId }: { taskId: string }) {
                   />
                 </TableCell>
                 <TableCell>
-                  <SourceCell asset={asset} />
+                  <SourceCell asset={asset} legacyFallback={labels.legacySource} sourceNodeLabel={labels.sourceNode} />
                 </TableCell>
                 <TableCell className="w-16">{removeButton(asset)}</TableCell>
               </TableRow>
@@ -547,7 +734,7 @@ export function AssetsTab({ taskId }: { taskId: string }) {
         </TabsContent>
 
         <TabsContent value="subdomain" className="mt-0 flex min-h-0 flex-1 flex-col">
-          <AssetCard cols={["域名", "根域名", "解析类型", "解析值", "来源", "操作"]} {...commonCardProps}>
+          <AssetCard cols={labels.colsSubdomain} {...commonCardProps}>
             {rows.map((asset) => (
               <TableRow key={asset.id}>
                 <TableCell className="font-medium font-mono text-xs">{asset.domain}</TableCell>
@@ -557,7 +744,7 @@ export function AssetsTab({ taskId }: { taskId: string }) {
                   {(Array.isArray(asset.record_value) ? asset.record_value.join(", ") : asset.record_value) || "—"}
                 </TableCell>
                 <TableCell>
-                  <SourceCell asset={asset} />
+                  <SourceCell asset={asset} legacyFallback={labels.legacySource} sourceNodeLabel={labels.sourceNode} />
                 </TableCell>
                 <TableCell className="w-16">{removeButton(asset)}</TableCell>
               </TableRow>
@@ -566,7 +753,7 @@ export function AssetsTab({ taskId }: { taskId: string }) {
         </TabsContent>
 
         <TabsContent value="app" className="mt-0 flex min-h-0 flex-1 flex-col">
-          <AssetCard cols={["应用", "地址", "分类", "标题", "指纹", "来源", "操作"]} {...commonCardProps}>
+          <AssetCard cols={labels.colsApp} {...commonCardProps}>
             {rows.map((asset) => (
               <TableRow key={asset.id}>
                 <TableCell className="max-w-48 truncate font-medium text-xs">{asset.app_name || "—"}</TableCell>
@@ -579,7 +766,7 @@ export function AssetsTab({ taskId }: { taskId: string }) {
                   <Chips items={asset.technologies ?? []} />
                 </TableCell>
                 <TableCell>
-                  <SourceCell asset={asset} />
+                  <SourceCell asset={asset} legacyFallback={labels.legacySource} sourceNodeLabel={labels.sourceNode} />
                 </TableCell>
                 <TableCell className="w-16">{removeButton(asset)}</TableCell>
               </TableRow>
@@ -588,10 +775,7 @@ export function AssetsTab({ taskId }: { taskId: string }) {
         </TabsContent>
 
         <TabsContent value="service" className="mt-0 flex min-h-0 flex-1 flex-col">
-          <AssetCard
-            cols={["地址 / 服务", "状态码", "标题", "响应长度", "指纹", "认证", "来源", "操作"]}
-            {...commonCardProps}
-          >
+          <AssetCard cols={labels.colsService} {...commonCardProps}>
             {rows.map((asset) => {
               const isHttp = asset.service_type === "http";
               const address = isHttp
@@ -626,18 +810,22 @@ export function AssetsTab({ taskId }: { taskId: string }) {
                         const item = authItem as Record<string, string>;
                         return (
                           <span
-                            key={`${asset.id}-${item.type ?? ""}-${item.username ?? ""}-${JSON.stringify(item)}`}
+                            key={`${asset.id}-${String(item.type)}-${String(item.username)}-${JSON.stringify(item)}`}
                             className="inline-flex items-center gap-1 text-[11px]"
                           >
                             <KeyRoundIcon className="size-3 text-muted-foreground" />
-                            <span className="font-mono">{item.type || item.username || "认证"}</span>
+                            <span className="font-mono">{item.type || item.username || "Auth"}</span>
                           </span>
                         );
                       })
                     )}
                   </TableCell>
                   <TableCell>
-                    <SourceCell asset={asset} />
+                    <SourceCell
+                      asset={asset}
+                      legacyFallback={labels.legacySource}
+                      sourceNodeLabel={labels.sourceNode}
+                    />
                   </TableCell>
                   <TableCell className="w-16">{removeButton(asset)}</TableCell>
                 </TableRow>
@@ -647,7 +835,7 @@ export function AssetsTab({ taskId }: { taskId: string }) {
         </TabsContent>
 
         <TabsContent value="endpoint" className="mt-0 flex min-h-0 flex-1 flex-col">
-          <AssetCard cols={["方法", "完整地址", "参数", "来源", "操作"]} {...commonCardProps}>
+          <AssetCard cols={labels.colsEndpoint} {...commonCardProps}>
             {rows.map((asset) => (
               <TableRow key={asset.id}>
                 <TableCell className="w-16">
@@ -666,7 +854,7 @@ export function AssetsTab({ taskId }: { taskId: string }) {
                   />
                 </TableCell>
                 <TableCell>
-                  <SourceCell asset={asset} />
+                  <SourceCell asset={asset} legacyFallback={labels.legacySource} sourceNodeLabel={labels.sourceNode} />
                 </TableCell>
                 <TableCell className="w-16">{removeButton(asset)}</TableCell>
               </TableRow>
@@ -675,29 +863,36 @@ export function AssetsTab({ taskId }: { taskId: string }) {
         </TabsContent>
       </Tabs>
 
-      <AddTaskAssetsSheet onAttached={refresh} onOpenChange={setAddOpen} open={addOpen} taskId={taskId} />
+      <AddTaskAssetsSheet
+        onAttached={refresh}
+        onOpenChange={setAddOpen}
+        open={addOpen}
+        taskId={taskId}
+        labels={{
+          addTitle: labels.addTitle,
+          addDesc: labels.addDesc,
+          editorLabel: labels.editorLabel,
+          editorDesc: labels.editorDesc,
+          cancel: labels.cancel,
+          submit: labels.submitAdd,
+          successToast: labels.successAdd,
+          failedToast: labels.failAdd,
+        }}
+      />
 
       <AlertDialog open={Boolean(removeTarget)} onOpenChange={(open) => !open && !removing && setRemoveTarget(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>移出当前任务？</AlertDialogTitle>
+            <AlertDialogTitle>{labels.removeTitle}</AlertDialogTitle>
             <AlertDialogDescription className="[overflow-wrap:anywhere]">
-              {removeTarget ? `将“${assetLabel(removeTarget)}”从当前任务的测试资产中移出。` : ""}
-              全局资产、关联流量和历史黑板锚点会继续保留。
+              {removeTarget ? labels.removeDesc(assetLabel(removeTarget)) : ""}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={removing}>取消</AlertDialogCancel>
-            <AlertDialogAction
-              variant="destructive"
-              disabled={removing}
-              onClick={(event) => {
-                event.preventDefault();
-                void remove();
-              }}
-            >
-              {removing ? <Spinner data-icon="inline-start" /> : <Trash2Icon data-icon="inline-start" />}
-              {removing ? "移出中" : "确认移出"}
+            <AlertDialogCancel disabled={removing}>{labels.cancel}</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void remove()} disabled={removing}>
+              {removing ? <Spinner data-icon="inline-start" /> : null}
+              {labels.removeConfirm}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

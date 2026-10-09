@@ -15,21 +15,74 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/u
 import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/lib/api";
+import { useI18n } from "@/lib/i18n/i18n-context";
 import type { Finding, FindingsPage } from "@/lib/types";
 
 const PAGE_SIZE = 20;
 
-function findingLabel(finding: Finding) {
-  return finding.name?.trim() || finding.vulnclass.trim() || "未分类";
+function findingLabel(finding: Finding, unclassified: string) {
+  return finding.name?.trim() || finding.vulnclass.trim() || unclassified;
 }
 
 export function RetestsTab({ taskId }: { taskId: string }) {
+  const { locale } = useI18n();
   const [page, setPage] = React.useState(1);
   const [data, setData] = React.useState<FindingsPage | null>(null);
   const [selectedId, setSelectedId] = React.useState("");
   const [error, setError] = React.useState("");
   const [refreshVersion, setRefreshVersion] = React.useState(0);
   const refresh = React.useCallback(() => setRefreshVersion((version) => version + 1), []);
+
+  const t = React.useMemo(() => {
+    switch (locale) {
+      case "pt":
+        return {
+          unclassified: "Não classificado",
+          loadError: "Falha ao carregar vulnerabilidades da tarefa: ",
+          retry: "Tentar novamente",
+          selectTitle: "Selecionar vulnerabilidade",
+          selectDesc: "Veja o histórico de retestes das vulnerabilidades desta tarefa ou inicie um novo reteste.",
+          ariaSelect: (name: string) => `Selecionar vulnerabilidade: ${name}`,
+          emptyTitle: "Nenhuma vulnerabilidade para reteste",
+          emptyDesc:
+            "Assim que vulnerabilidades forem identificadas nesta tarefa, você poderá solicitar retestes aqui.",
+          prevPage: "Página anterior",
+          nextPage: "Próxima página",
+          pageOf: (p: number, total: number) => `Página ${p} de ${total}`,
+          viewDetails: "Detalhes da vulnerabilidade",
+        };
+      case "zh":
+        return {
+          unclassified: "未分类",
+          loadError: "加载任务漏洞失败：",
+          retry: "重试",
+          selectTitle: "选择漏洞",
+          selectDesc: "查看本任务漏洞的复测记录，或发起新的复测。",
+          ariaSelect: (name: string) => `选择漏洞：${name}`,
+          emptyTitle: "暂无可复测漏洞",
+          emptyDesc: "本任务发现漏洞后，可在这里手动发起复测。",
+          prevPage: "上一页漏洞",
+          nextPage: "下一页漏洞",
+          pageOf: (p: number, total: number) => `第 ${p} / ${total} 页`,
+          viewDetails: "漏洞详情",
+        };
+      default:
+        return {
+          unclassified: "Unclassified",
+          loadError: "Failed to load task findings: ",
+          retry: "Retry",
+          selectTitle: "Select Finding",
+          selectDesc: "View retest records for this task's findings or initiate a new retest.",
+          ariaSelect: (name: string) => `Select finding: ${name}`,
+          emptyTitle: "No retestable findings",
+          emptyDesc: "Once findings are discovered in this task, you can manually initiate retests here.",
+          prevPage: "Previous page",
+          nextPage: "Next page",
+          pageOf: (p: number, total: number) => `Page ${p} of ${total}`,
+          viewDetails: "Finding details",
+        };
+    }
+  }, [locale]);
 
   // Only this task's own findings, including those without graph nodes.
   // Fetch history only for the selection, and wait for each poll to finish.
@@ -73,9 +126,10 @@ export function RetestsTab({ taskId }: { taskId: string }) {
       {error ? (
         <Alert variant="destructive">
           <AlertDescription>
-            加载任务漏洞失败：{error}
-            <Button variant="outline" size="sm" onClick={refresh}>
-              重试
+            {t.loadError}
+            {error}
+            <Button variant="outline" size="sm" onClick={refresh} className="ml-2">
+              {t.retry}
             </Button>
           </AlertDescription>
         </Alert>
@@ -83,8 +137,11 @@ export function RetestsTab({ taskId }: { taskId: string }) {
       <div className="grid items-start gap-4 lg:grid-cols-[minmax(16rem,22rem)_minmax(0,1fr)]">
         <Card className="min-w-0">
           <CardHeader>
-            <CardTitle>选择漏洞{data ? ` · ${data.total}` : ""}</CardTitle>
-            <CardDescription>查看本任务漏洞的复测记录，或发起新的复测。</CardDescription>
+            <CardTitle>
+              {t.selectTitle}
+              {data ? ` · ${data.total}` : ""}
+            </CardTitle>
+            <CardDescription>{t.selectDesc}</CardDescription>
           </CardHeader>
           <CardContent className="flex max-h-[32rem] flex-col overflow-y-auto">
             {!loaded && !error ? <Skeleton className="h-24 w-full" /> : null}
@@ -94,11 +151,11 @@ export function RetestsTab({ taskId }: { taskId: string }) {
                 <Button
                   variant={finding.id === selectedId ? "secondary" : "ghost"}
                   className="h-auto w-full shrink-0 flex-col items-start gap-2 whitespace-normal py-3 text-left"
-                  aria-label={`选择漏洞：${findingLabel(finding)}`}
+                  aria-label={t.ariaSelect(findingLabel(finding, t.unclassified))}
                   aria-pressed={finding.id === selectedId}
                   onClick={() => setSelectedId(finding.id)}
                 >
-                  <span className="line-clamp-2 break-words">{findingLabel(finding)}</span>
+                  <span className="line-clamp-2 break-words">{findingLabel(finding, t.unclassified)}</span>
                   <span className="flex flex-wrap items-center gap-2">
                     <StatusBadge domain="severity" value={finding.severity} dot />
                     <StatusBadge domain="finding" value={finding.status} dot />
@@ -109,8 +166,8 @@ export function RetestsTab({ taskId }: { taskId: string }) {
             {loaded && findings.length === 0 ? (
               <Empty>
                 <EmptyHeader>
-                  <EmptyTitle>暂无可复测漏洞</EmptyTitle>
-                  <EmptyDescription>本任务发现漏洞后，可在这里手动发起复测。</EmptyDescription>
+                  <EmptyTitle>{t.emptyTitle}</EmptyTitle>
+                  <EmptyDescription>{t.emptyDesc}</EmptyDescription>
                 </EmptyHeader>
               </Empty>
             ) : null}
@@ -120,19 +177,17 @@ export function RetestsTab({ taskId }: { taskId: string }) {
               <Button
                 variant="outline"
                 size="icon-sm"
-                aria-label="上一页漏洞"
+                aria-label={t.prevPage}
                 disabled={page === 1}
                 onClick={() => setPage(page - 1)}
               >
                 <ChevronLeftIcon />
               </Button>
-              <span className="text-muted-foreground text-xs">
-                第 {page} / {Math.ceil(data.total / PAGE_SIZE)} 页
-              </span>
+              <span className="text-muted-foreground text-xs">{t.pageOf(page, Math.ceil(data.total / PAGE_SIZE))}</span>
               <Button
                 variant="outline"
                 size="icon-sm"
-                aria-label="下一页漏洞"
+                aria-label={t.nextPage}
                 disabled={page * PAGE_SIZE >= data.total}
                 onClick={() => setPage(page + 1)}
               >
@@ -145,10 +200,10 @@ export function RetestsTab({ taskId }: { taskId: string }) {
           <div className="flex min-w-0 flex-col gap-4">
             <div className="flex flex-col gap-2">
               <div className="flex flex-wrap items-start justify-between gap-2">
-                <h2 className="min-w-0 flex-1 break-words font-medium">{findingLabel(selected)}</h2>
+                <h2 className="min-w-0 flex-1 break-words font-medium">{findingLabel(selected, t.unclassified)}</h2>
                 <Button asChild variant="ghost" size="sm">
                   <Link href={`/function/findings/detail?id=${selected.finding_id || selected.id}`}>
-                    漏洞详情 <ArrowUpRightIcon data-icon="inline-end" />
+                    {t.viewDetails} <ArrowUpRightIcon data-icon="inline-end" />
                   </Link>
                 </Button>
               </div>
@@ -157,7 +212,7 @@ export function RetestsTab({ taskId }: { taskId: string }) {
             <FindingRetestPanel
               key={selected.id}
               findingId={selected.finding_id || selected.id}
-              findingName={findingLabel(selected)}
+              findingName={findingLabel(selected, t.unclassified)}
               onCompleted={refresh}
             />
           </div>

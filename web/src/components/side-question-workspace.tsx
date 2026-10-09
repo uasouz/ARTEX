@@ -25,24 +25,151 @@ import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/componen
 import { Skeleton } from "@/components/ui/skeleton";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { SideQuestions } from "@/hooks/use-side-questions";
+import { useI18n } from "@/lib/i18n/i18n-context";
 import { cn } from "@/lib/utils";
 
 type ComposerLayout = "inline" | "stacked";
 
-const preparationLabels = {
-  preparing: "正在准备上下文…",
-  summarizing_history: "正在整理早期旁路问答…",
-  compressing_snapshot: "正在压缩旁路上下文副本…",
-  retrying: "模型上下文超限，正在缩减后重试…",
-  answering: "正在回答…",
+const I18N = {
+  en: {
+    sideQuestion: "Side Question",
+    sideQuestionTitle: "/btw Side Question",
+    panelAriaLabel: "Side Question Panel",
+    clearHistoryAria: "Clear side history",
+    closePanelAria: "Close side panel",
+    contextUpdatedAt: (time: string) => `Context updated at ${time}`,
+    availableAfterFirstRun: "Available after the main agent runs for the first time",
+    loadEarlier: "Load earlier side questions",
+    emptyTitle: "Ask a question anytime",
+    emptyDescription: "Answers based on current agent context while the main task continues running.",
+    contextPrefix: (time: string) => `Context ${time}`,
+    recentExchanges: (count: number) => `Last ${count} Q&A exchange(s)`,
+    includesHistorySummary: " · Includes earlier summary",
+    usesSnapshotSummary: " · Uses main context summary",
+    questionAria: "Side question",
+    questionPlaceholder: "Ask about current context…",
+    standaloneQaHint: "Standalone Q&A · No tool execution",
+    stopAnswerAria: "Stop side answer",
+    sendQuestionAria: "Send side question",
+    clearDialogTitle: "Clear side history?",
+    clearDialogDescription:
+      "Delete side questions for the current agent and stop active generation. Main conversation and context snapshots are preserved.",
+    cancel: "Cancel",
+    clearHistory: "Clear History",
+    drawerDescription: (lbl: string) => `Standalone Q&A for ${lbl}`,
+    status: {
+      running: "Answering",
+      completed: "Completed",
+      failed: "Failed",
+      cancelled: "Stopped",
+      interrupted: "Interrupted",
+    },
+    phases: {
+      preparing: "Preparing context…",
+      summarizing_history: "Summarizing earlier side Q&A…",
+      compressing_snapshot: "Compressing side context snapshot…",
+      retrying: "Context limit exceeded, retrying with reduction…",
+      answering: "Answering…",
+    },
+  },
+  pt: {
+    sideQuestion: "Pergunta Paralela",
+    sideQuestionTitle: "/btw Pergunta Paralela",
+    panelAriaLabel: "Painel de Perguntas Paralelas",
+    clearHistoryAria: "Limpar histórico paralelo",
+    closePanelAria: "Fechar painel paralelo",
+    contextUpdatedAt: (time: string) => `Contexto atualizado em ${time}`,
+    availableAfterFirstRun: "Disponível após a primeira execução do agente principal",
+    loadEarlier: "Carregar perguntas anteriores",
+    emptyTitle: "Faça uma pergunta a qualquer momento",
+    emptyDescription: "Responde com base no contexto atual do agente enquanto a tarefa principal continua.",
+    contextPrefix: (time: string) => `Contexto ${time}`,
+    recentExchanges: (count: number) => `Últimas ${count} perguntas e respostas`,
+    includesHistorySummary: " · Inclui resumo anterior",
+    usesSnapshotSummary: " · Usa resumo do contexto principal",
+    questionAria: "Pergunta paralela",
+    questionPlaceholder: "Pergunte sobre o contexto atual…",
+    standaloneQaHint: "Perguntas isoladas · Sem execução de ferramentas",
+    stopAnswerAria: "Parar resposta paralela",
+    sendQuestionAria: "Enviar pergunta paralela",
+    clearDialogTitle: "Limpar histórico paralelo?",
+    clearDialogDescription:
+      "Exclui as perguntas paralelas do agente atual e interrompe a geração em andamento. A conversa principal e os instantâneos são mantidos.",
+    cancel: "Cancelar",
+    clearHistory: "Limpar Histórico",
+    drawerDescription: (lbl: string) => `Perguntas e respostas isoladas para ${lbl}`,
+    status: {
+      running: "Respondendo",
+      completed: "Concluído",
+      failed: "Falhou",
+      cancelled: "Interrompido",
+      interrupted: "Interrompido",
+    },
+    phases: {
+      preparing: "Preparando contexto…",
+      summarizing_history: "Resumindo perguntas e respostas anteriores…",
+      compressing_snapshot: "Comprimindo instantâneo do contexto paralelo…",
+      retrying: "Limite de contexto excedido, tentando novamente reduzido…",
+      answering: "Respondendo…",
+    },
+  },
+  zh: {
+    sideQuestion: "旁路提问",
+    sideQuestionTitle: "/btw 旁路提问",
+    panelAriaLabel: "旁路提问面板",
+    clearHistoryAria: "清空旁路历史",
+    closePanelAria: "关闭旁路面板",
+    contextUpdatedAt: (time: string) => `上下文更新于 ${time}`,
+    availableAfterFirstRun: "主 Agent 首次运行后即可提问",
+    loadEarlier: "加载更早的旁路问答",
+    emptyTitle: "随时问一个问题",
+    emptyDescription: "根据当前 Agent 的上下文回答，主任务继续运行。",
+    contextPrefix: (time: string) => `上下文 ${time}`,
+    recentExchanges: (count: number) => `最近 ${count} 组问答原文`,
+    includesHistorySummary: " · 含早期问答摘要",
+    usesSnapshotSummary: " · 使用主上下文摘要",
+    questionAria: "旁路问题",
+    questionPlaceholder: "询问当前上下文…",
+    standaloneQaHint: "独立问答 · 无工具执行",
+    stopAnswerAria: "停止旁路回答",
+    sendQuestionAria: "发送旁路问题",
+    clearDialogTitle: "清空旁路历史？",
+    clearDialogDescription: "删除当前 Agent 的旁路问答，并停止正在生成的旁路回答。主会话和上下文快照会保留。",
+    cancel: "取消",
+    clearHistory: "清空历史",
+    drawerDescription: (lbl: string) => `${lbl} 的独立问答`,
+    status: {
+      running: "回答中",
+      completed: "已完成",
+      failed: "失败",
+      cancelled: "已停止",
+      interrupted: "已中断",
+    },
+    phases: {
+      preparing: "正在准备上下文…",
+      summarizing_history: "正在整理早期旁路问答…",
+      compressing_snapshot: "正在压缩旁路上下文副本…",
+      retrying: "模型上下文超限，正在缩减后重试…",
+      answering: "正在回答…",
+    },
+  },
+};
+
+const DATE_LOCALES: Record<string, string> = {
+  zh: "zh-CN",
+  pt: "pt-BR",
+  en: "en-US",
 };
 
 export function SideQuestionButton({ side }: { side: SideQuestions }) {
+  const { locale } = useI18n();
+  const t = I18N[locale] ?? I18N.en;
+
   if (!side.enabled) return null;
   return (
-    <Button variant="outline" size="sm" onClick={() => side.setOpen(true)} title="/btw 旁路提问">
+    <Button variant="outline" size="sm" onClick={() => side.setOpen(true)} title={t.sideQuestionTitle}>
       <MessageCircleQuestionIcon data-icon="inline-start" />
-      旁路提问
+      {t.sideQuestion}
     </Button>
   );
 }
@@ -56,6 +183,10 @@ function SidePanel({
   label: string;
   composerLayout: ComposerLayout;
 }) {
+  const { locale } = useI18n();
+  const t = I18N[locale] ?? I18N.en;
+  const dateLocale = DATE_LOCALES[locale] ?? "en-US";
+
   const inlineComposer = composerLayout === "inline";
   const [confirm, setConfirm] = useState(false);
   const viewport = useRef<HTMLDivElement>(null);
@@ -65,13 +196,13 @@ function SidePanel({
   useEffect(() => {
     if (pinned.current && viewport.current) viewport.current.scrollTop = viewport.current.scrollHeight;
   }, [tail?.answer, tail?.id]);
-  const status = { running: "回答中", completed: "已完成", failed: "失败", cancelled: "已停止", interrupted: "已中断" };
+  const status = t.status;
   return (
-    <section className="flex h-full min-h-0 flex-col bg-background" aria-label="旁路提问面板">
+    <section className="flex h-full min-h-0 flex-col bg-background" aria-label={t.panelAriaLabel}>
       <div className="flex items-center gap-2 border-b p-3">
         <div className="min-w-0 flex-1">
           <p className="font-medium">
-            旁路提问 <span className="text-muted-foreground">/btw</span>
+            {t.sideQuestion} <span className="text-muted-foreground">/btw</span>
           </p>
           <p className="truncate text-muted-foreground text-xs">{label}</p>
         </div>
@@ -80,11 +211,11 @@ function SidePanel({
           size="icon-sm"
           onClick={() => setConfirm(true)}
           disabled={!side.items.length || side.busy}
-          aria-label="清空旁路历史"
+          aria-label={t.clearHistoryAria}
         >
           <Trash2Icon />
         </Button>
-        <Button variant="ghost" size="icon-sm" onClick={() => side.setOpen(false)} aria-label="关闭旁路面板">
+        <Button variant="ghost" size="icon-sm" onClick={() => side.setOpen(false)} aria-label={t.closePanelAria}>
           <XIcon />
         </Button>
       </div>
@@ -92,10 +223,10 @@ function SidePanel({
         {side.snapshot ? (
           <>
             <p>{side.snapshot.model.model}</p>
-            <p>上下文更新于 {new Date(side.snapshot.captured_at).toLocaleString()}</p>
+            <p>{t.contextUpdatedAt(new Date(side.snapshot.captured_at).toLocaleString(dateLocale))}</p>
           </>
         ) : (
-          "主 Agent 首次运行后即可提问"
+          t.availableAfterFirstRun
         )}
       </div>
       <div
@@ -108,15 +239,15 @@ function SidePanel({
       >
         {side.nextCursor > 0 && (
           <Button variant="ghost" size="sm" onClick={() => void side.load(side.nextCursor)}>
-            加载更早的旁路问答
+            {t.loadEarlier}
           </Button>
         )}
         {side.loading && <Skeleton className="h-16 w-full" />}
         {!side.loading && side.items.length === 0 && (
           <Empty>
             <EmptyHeader>
-              <EmptyTitle>随时问一个问题</EmptyTitle>
-              <EmptyDescription>根据当前 Agent 的上下文回答，主任务继续运行。</EmptyDescription>
+              <EmptyTitle>{t.emptyTitle}</EmptyTitle>
+              <EmptyDescription>{t.emptyDescription}</EmptyDescription>
             </EmptyHeader>
           </Empty>
         )}
@@ -127,21 +258,21 @@ function SidePanel({
               <div className="flex flex-wrap items-center gap-2 text-muted-foreground text-xs">
                 <Badge variant="secondary">{status[item.status]}</Badge>
                 <span className="truncate">{item.model.model}</span>
-                <time dateTime={item.snapshot_at} title={new Date(item.snapshot_at).toLocaleString()}>
-                  上下文 {new Date(item.snapshot_at).toLocaleTimeString()}
+                <time dateTime={item.snapshot_at} title={new Date(item.snapshot_at).toLocaleString(dateLocale)}>
+                  {t.contextPrefix(new Date(item.snapshot_at).toLocaleTimeString(dateLocale))}
                 </time>
               </div>
               {item.context?.estimated_input_tokens != null && (
                 <p className="text-muted-foreground text-xs">
-                  最近 {item.context.recent_exchanges} 组问答原文
-                  {item.context.history_summarized && " · 含早期问答摘要"}
-                  {item.context.snapshot_summarized && " · 使用主上下文摘要"}
+                  {t.recentExchanges(item.context.recent_exchanges)}
+                  {item.context.history_summarized && t.includesHistorySummary}
+                  {item.context.snapshot_summarized && t.usesSnapshotSummary}
                 </p>
               )}
               {item.answer && <Markdown text={item.answer} />}
               {!item.answer && item.status === "running" && (
                 <p role="status" className="text-muted-foreground text-sm">
-                  {preparationLabels[item.context?.phase ?? "answering"]}
+                  {t.phases[item.context?.phase ?? "answering"]}
                 </p>
               )}
               {item.error && (
@@ -163,8 +294,8 @@ function SidePanel({
           <InputGroupTextarea
             rows={1}
             className={cn("overflow-y-auto", inlineComposer ? "max-h-40 min-h-0" : "max-h-36 min-h-9")}
-            aria-label="旁路问题"
-            placeholder="询问当前上下文…"
+            aria-label={t.questionAria}
+            placeholder={t.questionPlaceholder}
             value={side.draft}
             maxLength={4000}
             disabled={side.busy}
@@ -177,14 +308,14 @@ function SidePanel({
             }}
           />
           <InputGroupAddon align={inlineComposer ? "inline-end" : "block-end"}>
-            {!inlineComposer && <span className="text-muted-foreground text-xs">独立问答 · 无工具执行</span>}
+            {!inlineComposer && <span className="text-muted-foreground text-xs">{t.standaloneQaHint}</span>}
             {side.running ? (
               <InputGroupButton
                 className="ml-auto"
                 variant="destructive"
                 size="icon-xs"
                 onClick={() => void side.stop()}
-                aria-label="停止旁路回答"
+                aria-label={t.stopAnswerAria}
               >
                 <SquareIcon />
               </InputGroupButton>
@@ -195,7 +326,7 @@ function SidePanel({
                 size="icon-xs"
                 onClick={() => void side.ask(side.draft)}
                 disabled={side.busy || !side.draft.trim() || !side.snapshot?.available}
-                aria-label="发送旁路问题"
+                aria-label={t.sendQuestionAria}
               >
                 <ArrowUpIcon />
               </InputGroupButton>
@@ -204,19 +335,17 @@ function SidePanel({
         </InputGroup>
       </div>
       {inlineComposer && (
-        <div className="shrink-0 truncate px-3 pt-0.5 pb-1 text-muted-foreground text-xs">独立问答 · 无工具执行</div>
+        <div className="shrink-0 truncate px-3 pt-0.5 pb-1 text-muted-foreground text-xs">{t.standaloneQaHint}</div>
       )}
       <AlertDialog open={confirm} onOpenChange={setConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>清空旁路历史？</AlertDialogTitle>
-            <AlertDialogDescription>
-              删除当前 Agent 的旁路问答，并停止正在生成的旁路回答。主会话和上下文快照会保留。
-            </AlertDialogDescription>
+            <AlertDialogTitle>{t.clearDialogTitle}</AlertDialogTitle>
+            <AlertDialogDescription>{t.clearDialogDescription}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>取消</AlertDialogCancel>
-            <AlertDialogAction onClick={() => void side.clear()}>清空历史</AlertDialogAction>
+            <AlertDialogCancel>{t.cancel}</AlertDialogCancel>
+            <AlertDialogAction onClick={() => void side.clear()}>{t.clearHistory}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -235,7 +364,10 @@ export function SideQuestionWorkspace({
   children: ReactNode;
   composerLayout?: ComposerLayout;
 }) {
+  const { locale } = useI18n();
+  const t = I18N[locale] ?? I18N.en;
   const mobile = useIsMobile();
+
   return (
     <>
       <ResizablePanelGroup orientation="horizontal" className="min-h-0 min-w-0 flex-1">
@@ -254,8 +386,8 @@ export function SideQuestionWorkspace({
       <Drawer open={mobile && side.open && side.enabled} onOpenChange={side.setOpen}>
         <DrawerContent className="h-[85svh]">
           <DrawerHeader className="sr-only">
-            <DrawerTitle>旁路提问</DrawerTitle>
-            <DrawerDescription>{label} 的独立问答</DrawerDescription>
+            <DrawerTitle>{t.sideQuestion}</DrawerTitle>
+            <DrawerDescription>{t.drawerDescription(label)}</DrawerDescription>
           </DrawerHeader>
           <SidePanel side={side} label={label} composerLayout={composerLayout} />
         </DrawerContent>

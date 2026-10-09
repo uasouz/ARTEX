@@ -13,11 +13,13 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { api } from "@/lib/api";
+import { useI18n } from "@/lib/i18n/i18n-context";
 import type { CommandRecord, ToolStat } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-function fmtTime(ts: string) {
-  return new Date(ts).toLocaleString("zh-CN", {
+function fmtTime(ts: string, locale: string) {
+  const dateLocale = ({ zh: "zh-CN", pt: "pt-BR" } as Record<string, string>)[locale] ?? "en-US";
+  return new Date(ts).toLocaleString(dateLocale, {
     month: "2-digit",
     day: "2-digit",
     hour: "2-digit",
@@ -26,8 +28,6 @@ function fmtTime(ts: string) {
   });
 }
 
-// toolInput renders a tool's raw input for display. Bash's {"command":"..."} is
-// unwrapped to the bare command; other tools show their pretty-printed JSON args.
 function toolInput(raw: string): string {
   try {
     const obj = JSON.parse(raw);
@@ -39,17 +39,17 @@ function toolInput(raw: string): string {
   return raw;
 }
 
-// truncate clips a string to maxLen characters.
 function truncate(s: string, maxLen: number): string {
-  const first = s.split("\n")[0]; // single-line preview
+  const first = s.split("\n")[0];
   if (first.length <= maxLen) return first;
-  return first.slice(0, maxLen) + "…";
+  return `${first.slice(0, maxLen)}…`;
 }
 
 const PAGE_SIZES = [25, 50, 100];
 const CMD_MAX_LEN = 80;
 
 export default function CommandsPage() {
+  const { locale } = useI18n();
   const [page, setPage] = React.useState(0);
   const [size, setSize] = React.useState(50);
   const [query, setQuery] = React.useState("");
@@ -60,27 +60,113 @@ export default function CommandsPage() {
   const [total, setTotal] = React.useState(0);
   const [loading, setLoading] = React.useState(false);
 
-  // 各工具调用次数。弹窗打开时才拉取（多一次聚合查询，不必每次翻页都付）。
   const [statsOpen, setStatsOpen] = React.useState(false);
   const [stats, setStats] = React.useState<ToolStat[]>([]);
   const [statsLoading, setStatsLoading] = React.useState(false);
 
-  // Selected execution is rendered in a right-side detail sheet.
   const [selected, setSelected] = React.useState<CommandRecord | null>(null);
 
-  // Debounce search input.
+  const strings = React.useMemo(() => {
+    if (locale === "pt") {
+      return {
+        title: "Execução de Ferramentas",
+        searchPlaceholder: "Buscar ferramentas / argumentos...",
+        taskIdPlaceholder: "ID da Tarefa",
+        perPage: "/ página",
+        statsBtn: "Estatísticas",
+        timeCol: "Horário",
+        taskCol: "Tarefa",
+        workerCol: "Worker",
+        toolCol: "Ferramenta",
+        inputCol: "Entrada",
+        statusCol: "Status",
+        noRecords: "Nenhum registro de execução de ferramentas",
+        failed: "Falha",
+        success: "Sucesso",
+        statsTitle: "Estatísticas de Chamadas de Ferramentas",
+        statsDescFiltered: "Todos os registros sob as condições de filtro atuais",
+        statsDescAll: "Todos os registros de execução de ferramentas",
+        toolsCount: (n: number) => `${n} ferramentas`,
+        callsCount: (n: number) => `${n} chamadas`,
+        failedCount: (n: number) => ` · Falhas ${n}`,
+        noStatsData: "Sem dados estatísticos",
+        toolFailed: (n: number) => `Falha ${n}`,
+        detailTitle: "Detalhes da Execução da Ferramenta",
+        inputSection: "Entrada Input",
+        outputSection: "Saída Output",
+        emptyOutput: "(vazio)",
+      };
+    }
+    if (locale === "zh") {
+      return {
+        title: "工具执行",
+        searchPlaceholder: "搜索工具 / 参数...",
+        taskIdPlaceholder: "任务 ID",
+        perPage: "/ 页",
+        statsBtn: "统计",
+        timeCol: "时间",
+        taskCol: "任务",
+        workerCol: "Worker",
+        toolCol: "工具",
+        inputCol: "输入",
+        statusCol: "状态",
+        noRecords: "暂无工具执行记录",
+        failed: "失败",
+        success: "成功",
+        statsTitle: "工具调用统计",
+        statsDescFiltered: "当前筛选条件下的全部记录",
+        statsDescAll: "全部工具执行记录",
+        toolsCount: (n: number) => `${n} 个工具`,
+        callsCount: (n: number) => `${n} 次调用`,
+        failedCount: (n: number) => ` · 失败 ${n}`,
+        noStatsData: "暂无统计数据",
+        toolFailed: (n: number) => `失败 ${n}`,
+        detailTitle: "工具执行详情",
+        inputSection: "输入 Input",
+        outputSection: "输出 Output",
+        emptyOutput: "（空）",
+      };
+    }
+    return {
+      title: "Tool Executions",
+      searchPlaceholder: "Search tools / arguments...",
+      taskIdPlaceholder: "Task ID",
+      perPage: "/ page",
+      statsBtn: "Statistics",
+      timeCol: "Time",
+      taskCol: "Task",
+      workerCol: "Worker",
+      toolCol: "Tool",
+      inputCol: "Input",
+      statusCol: "Status",
+      noRecords: "No tool execution records",
+      failed: "Failed",
+      success: "Success",
+      statsTitle: "Tool Invocation Statistics",
+      statsDescFiltered: "All records under current filter criteria",
+      statsDescAll: "All tool execution records",
+      toolsCount: (n: number) => `${n} tools`,
+      callsCount: (n: number) => `${n} calls`,
+      failedCount: (n: number) => ` · Failed ${n}`,
+      noStatsData: "No statistical data",
+      toolFailed: (n: number) => `Failed ${n}`,
+      detailTitle: "Tool Execution Details",
+      inputSection: "Input",
+      outputSection: "Output",
+      emptyOutput: "(empty)",
+    };
+  }, [locale]);
+
   React.useEffect(() => {
     const t = setTimeout(() => setQueryQ(query.trim()), 300);
     return () => clearTimeout(t);
   }, [query]);
 
-  // Reset page on filter change.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: every filter change intentionally resets pagination.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: filter change resets pagination
   React.useEffect(() => {
     setPage(0);
   }, [queryQ, taskFilter, size]);
 
-  // Load data.
   React.useEffect(() => {
     let alive = true;
     setLoading(true);
@@ -102,7 +188,6 @@ export default function CommandsPage() {
     };
   }, [page, size, queryQ, taskFilter]);
 
-  // 统计跟随筛选条件走，和表格描述的是同一批记录（但不分页）。
   React.useEffect(() => {
     if (!statsOpen) return;
     let alive = true;
@@ -124,13 +209,111 @@ export default function CommandsPage() {
   const rangeStart = total === 0 ? 0 : page * size + 1;
   const rangeEnd = page * size + commands.length;
 
+  const renderTableBody = () => {
+    if (loading && commands.length === 0) {
+      return (
+        <TableRow>
+          <TableCell colSpan={6} className="py-12 text-center">
+            <Loader2Icon className="mx-auto h-5 w-5 animate-spin text-muted-foreground" />
+          </TableCell>
+        </TableRow>
+      );
+    }
+    if (commands.length === 0) {
+      return (
+        <TableRow>
+          <TableCell colSpan={6} className="py-12 text-center text-sm text-muted-foreground">
+            {strings.noRecords}
+          </TableCell>
+        </TableRow>
+      );
+    }
+    return commands.map((cmd) => (
+      <TableRow
+        key={cmd.id}
+        className={cn("cursor-pointer", selected?.id === cmd.id && "bg-accent hover:bg-accent")}
+        onClick={() => setSelected(cmd)}
+      >
+        <TableCell className="text-xs text-muted-foreground tabular-nums">{fmtTime(cmd.created_at, locale)}</TableCell>
+        <TableCell className="text-xs font-mono text-muted-foreground">#{cmd.exploration_id}</TableCell>
+        <TableCell>
+          <Badge variant="outline" className="text-xs font-mono">
+            {cmd.worker || "-"}
+          </Badge>
+        </TableCell>
+        <TableCell>
+          <Badge variant="secondary" className="text-xs font-mono">
+            {cmd.tool || "-"}
+          </Badge>
+        </TableCell>
+        <TableCell className="max-w-0">
+          <code className="block truncate font-mono text-xs">{truncate(toolInput(cmd.command), CMD_MAX_LEN)}</code>
+        </TableCell>
+        <TableCell>
+          {cmd.is_error ? (
+            <Badge variant="destructive" className="text-xs">
+              {strings.failed}
+            </Badge>
+          ) : (
+            <Badge variant="secondary" className="text-xs text-emerald-600">
+              {strings.success}
+            </Badge>
+          )}
+        </TableCell>
+      </TableRow>
+    ));
+  };
+
+  const renderStatsContent = () => {
+    if (statsLoading && stats.length === 0) {
+      return (
+        <div className="py-10 text-center">
+          <Loader2Icon className="mx-auto h-5 w-5 animate-spin text-muted-foreground" />
+        </div>
+      );
+    }
+    if (stats.length === 0) {
+      return <div className="py-10 text-center text-sm text-muted-foreground">{strings.noStatsData}</div>;
+    }
+    return (
+      <div className="-mr-2 max-h-[55vh] space-y-1 overflow-auto pr-2">
+        {stats.map((s) => (
+          <div key={s.tool} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-md p-2">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <span className="truncate font-mono text-xs font-medium">{s.tool}</span>
+                {s.errors > 0 && (
+                  <span className="text-[11px] tabular-nums text-red-600 dark:text-red-400">
+                    {strings.toolFailed(s.errors)}
+                  </span>
+                )}
+              </div>
+              <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
+                <div
+                  className="h-full rounded-full bg-primary"
+                  style={{ width: `${statsMax > 0 ? (s.total / statsMax) * 100 : 0}%` }}
+                />
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-xs font-semibold tabular-nums">{s.total}</div>
+              <div className="text-[11px] tabular-nums text-muted-foreground">
+                {statsTotal > 0 ? ((s.total / statsTotal) * 100).toFixed(1) : "0.0"}%
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-4">
       {/* Header */}
       <div className="flex items-center justify-between gap-4">
         <div className="flex items-center gap-2">
           <TerminalIcon className="h-5 w-5 text-muted-foreground" />
-          <h1 className="text-xl font-semibold tracking-tight">工具执行</h1>
+          <h1 className="text-xl font-semibold tracking-tight">{strings.title}</h1>
           <Badge variant="secondary">{total}</Badge>
         </div>
       </div>
@@ -140,14 +323,14 @@ export default function CommandsPage() {
         <div className="relative max-w-sm flex-1">
           <SearchIcon className="absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="搜索工具 / 参数..."
+            placeholder={strings.searchPlaceholder}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             className="h-8 pl-8"
           />
         </div>
         <Input
-          placeholder="任务 ID"
+          placeholder={strings.taskIdPlaceholder}
           className="h-8 w-28"
           value={taskFilter}
           onChange={(e) => setTaskFilter(e.target.value.replace(/\D/g, ""))}
@@ -159,7 +342,7 @@ export default function CommandsPage() {
           <SelectContent>
             {PAGE_SIZES.map((n) => (
               <SelectItem key={n} value={String(n)}>
-                {n} / 页
+                {n} {strings.perPage}
               </SelectItem>
             ))}
           </SelectContent>
@@ -167,7 +350,7 @@ export default function CommandsPage() {
 
         <Button variant="outline" size="sm" className="h-8" onClick={() => setStatsOpen(true)}>
           <BarChart3Icon className="size-4" />
-          统计
+          {strings.statsBtn}
         </Button>
 
         <div className="ml-auto flex items-center gap-2 text-xs text-muted-foreground">
@@ -205,130 +388,42 @@ export default function CommandsPage() {
             <Table>
               <TableHeader className="sticky top-0 z-10 bg-card">
                 <TableRow>
-                  <TableHead className="w-[130px]">时间</TableHead>
-                  <TableHead className="w-[60px]">任务</TableHead>
-                  <TableHead className="w-[90px]">Worker</TableHead>
-                  <TableHead className="w-[110px]">工具</TableHead>
-                  <TableHead>输入</TableHead>
-                  <TableHead className="w-[60px]">状态</TableHead>
+                  <TableHead className="w-[130px]">{strings.timeCol}</TableHead>
+                  <TableHead className="w-[60px]">{strings.taskCol}</TableHead>
+                  <TableHead className="w-[90px]">{strings.workerCol}</TableHead>
+                  <TableHead className="w-[110px]">{strings.toolCol}</TableHead>
+                  <TableHead>{strings.inputCol}</TableHead>
+                  <TableHead className="w-[60px]">{strings.statusCol}</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
-                {loading && commands.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="py-12 text-center">
-                      <Loader2Icon className="mx-auto h-5 w-5 animate-spin text-muted-foreground" />
-                    </TableCell>
-                  </TableRow>
-                ) : commands.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="py-12 text-center text-sm text-muted-foreground">
-                      暂无工具执行记录
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  commands.map((cmd) => (
-                    <TableRow
-                      key={cmd.id}
-                      className={cn("cursor-pointer", selected?.id === cmd.id && "bg-accent hover:bg-accent")}
-                      onClick={() => setSelected(cmd)}
-                    >
-                      <TableCell className="text-xs text-muted-foreground tabular-nums">
-                        {fmtTime(cmd.created_at)}
-                      </TableCell>
-                      <TableCell className="text-xs font-mono text-muted-foreground">#{cmd.exploration_id}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline" className="text-xs font-mono">
-                          {cmd.worker || "-"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary" className="text-xs font-mono">
-                          {cmd.tool || "-"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="max-w-0">
-                        <code className="block truncate font-mono text-xs">
-                          {truncate(toolInput(cmd.command), CMD_MAX_LEN)}
-                        </code>
-                      </TableCell>
-                      <TableCell>
-                        {cmd.is_error ? (
-                          <Badge variant="destructive" className="text-xs">
-                            失败
-                          </Badge>
-                        ) : (
-                          <Badge variant="secondary" className="text-xs text-emerald-600">
-                            成功
-                          </Badge>
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
+              <TableBody>{renderTableBody()}</TableBody>
             </Table>
           </div>
         </Card>
       </div>
 
-      {/* 工具调用统计：与表格同一批记录（同筛选、不分页） */}
+      {/* Stats dialog */}
       <Dialog open={statsOpen} onOpenChange={setStatsOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>工具调用统计</DialogTitle>
+            <DialogTitle>{strings.statsTitle}</DialogTitle>
             <DialogDescription>
-              {taskFilter || queryQ ? "当前筛选条件下的全部记录" : "全部工具执行记录"}
+              {taskFilter || queryQ ? strings.statsDescFiltered : strings.statsDescAll}
               {stats.length > 0 && (
                 <>
                   {" · "}
-                  <span className="tabular-nums">{stats.length}</span> 个工具 ·{" "}
-                  <span className="tabular-nums">{statsTotal}</span> 次调用
+                  <span className="tabular-nums">{strings.toolsCount(stats.length)}</span> ·{" "}
+                  <span className="tabular-nums">{strings.callsCount(statsTotal)}</span>
                   {statsErrors > 0 && (
-                    <>
-                      {" · 失败 "}
-                      <span className="tabular-nums text-red-600 dark:text-red-400">{statsErrors}</span>
-                    </>
+                    <span className="tabular-nums text-red-600 dark:text-red-400">
+                      {strings.failedCount(statsErrors)}
+                    </span>
                   )}
                 </>
               )}
             </DialogDescription>
           </DialogHeader>
-
-          {statsLoading && stats.length === 0 ? (
-            <div className="py-10 text-center">
-              <Loader2Icon className="mx-auto h-5 w-5 animate-spin text-muted-foreground" />
-            </div>
-          ) : stats.length === 0 ? (
-            <div className="py-10 text-center text-sm text-muted-foreground">暂无统计数据</div>
-          ) : (
-            <div className="-mr-2 max-h-[55vh] space-y-1 overflow-auto pr-2">
-              {stats.map((s) => (
-                <div key={s.tool} className="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-3 rounded-md p-2">
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <span className="truncate font-mono text-xs font-medium">{s.tool}</span>
-                      {s.errors > 0 && (
-                        <span className="text-[11px] tabular-nums text-red-600 dark:text-red-400">失败 {s.errors}</span>
-                      )}
-                    </div>
-                    <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-muted">
-                      <div
-                        className="h-full rounded-full bg-primary"
-                        style={{ width: `${statsMax > 0 ? (s.total / statsMax) * 100 : 0}%` }}
-                      />
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-xs font-semibold tabular-nums">{s.total}</div>
-                    <div className="text-[11px] tabular-nums text-muted-foreground">
-                      {statsTotal > 0 ? ((s.total / statsTotal) * 100).toFixed(1) : "0.0"}%
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
+          {renderStatsContent()}
         </DialogContent>
       </Dialog>
 
@@ -337,8 +432,8 @@ export default function CommandsPage() {
           {selected && (
             <>
               <SheetHeader className="border-b px-5 py-4">
-                <SheetTitle className="pr-8">工具执行详情</SheetTitle>
-                <SheetDescription>{fmtTime(selected.created_at)}</SheetDescription>
+                <SheetTitle className="pr-8">{strings.detailTitle}</SheetTitle>
+                <SheetDescription>{fmtTime(selected.created_at, locale)}</SheetDescription>
                 <div className="flex flex-wrap items-center gap-2 pt-2">
                   <Badge variant="outline" className="text-xs font-mono">
                     #{selected.exploration_id}
@@ -351,18 +446,20 @@ export default function CommandsPage() {
                   </Badge>
                   {selected.is_error ? (
                     <Badge variant="destructive" className="text-xs">
-                      失败
+                      {strings.failed}
                     </Badge>
                   ) : (
                     <Badge variant="secondary" className="text-xs text-emerald-600">
-                      成功
+                      {strings.success}
                     </Badge>
                   )}
                 </div>
               </SheetHeader>
               <div className="grid min-h-0 flex-1 grid-rows-2 divide-y">
                 <div className="flex min-h-0 min-w-0 flex-col">
-                  <div className="border-b px-5 py-2 text-xs font-medium text-muted-foreground">输入 Input</div>
+                  <div className="border-b px-5 py-2 text-xs font-medium text-muted-foreground">
+                    {strings.inputSection}
+                  </div>
                   <div className="min-h-0 flex-1 overflow-auto">
                     <pre className="p-5 font-mono text-xs break-all whitespace-pre-wrap">
                       {toolInput(selected.command)}
@@ -370,7 +467,9 @@ export default function CommandsPage() {
                   </div>
                 </div>
                 <div className="flex min-h-0 min-w-0 flex-col">
-                  <div className="border-b px-5 py-2 text-xs font-medium text-muted-foreground">输出 Output</div>
+                  <div className="border-b px-5 py-2 text-xs font-medium text-muted-foreground">
+                    {strings.outputSection}
+                  </div>
                   <div className="min-h-0 flex-1 overflow-auto">
                     <pre
                       className={cn(
@@ -378,7 +477,7 @@ export default function CommandsPage() {
                         selected.is_error && "text-red-600 dark:text-red-400",
                       )}
                     >
-                      {selected.output || "（空）"}
+                      {selected.output || strings.emptyOutput}
                     </pre>
                   </div>
                 </div>

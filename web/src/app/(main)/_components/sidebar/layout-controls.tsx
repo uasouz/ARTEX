@@ -8,6 +8,8 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { type FontKey, fontOptions } from "@/lib/fonts/registry";
+import { useI18n } from "@/lib/i18n/i18n-context";
+import type { Locale } from "@/lib/i18n/types";
 import type { ContentLayout, NavbarStyle, SidebarCollapsible, SidebarVariant } from "@/lib/preferences/layout";
 import {
   applyContentLayout,
@@ -38,6 +40,8 @@ export function LayoutControls() {
   const setSidebarCollapsible = usePreferencesStore((s) => s.setSidebarCollapsible);
   const font = usePreferencesStore((s) => s.font);
   const setFont = usePreferencesStore((s) => s.setFont);
+
+  const { locale, setLocale, locales, d } = useI18n();
 
   const onThemePresetChange = (preset: ThemePreset) => {
     applyThemePreset(preset);
@@ -106,12 +110,32 @@ export function LayoutControls() {
       <PopoverContent align="end">
         <div className="flex flex-col gap-5">
           <div className="space-y-1.5">
-            <h4 className="font-medium text-sm leading-none">Preferences</h4>
-            <p className="text-muted-foreground text-xs">Customize your dashboard layout preferences.</p>
+            <h4 className="font-medium text-sm leading-none">{d.preferences.title}</h4>
+            <p className="text-muted-foreground text-xs">{d.preferences.description}</p>
           </div>
           <div className="space-y-3 **:data-[slot=toggle-group]:w-full **:data-[slot=toggle-group-item]:flex-1 **:data-[slot=toggle-group-item]:text-xs">
+            {/* Language Selector */}
             <div className="space-y-1">
-              <Label className="font-medium text-xs">Theme Preset</Label>
+              <Label className="font-medium text-xs">{d.header.language}</Label>
+              <Select value={locale} onValueChange={(val: Locale) => setLocale(val)}>
+                <SelectTrigger size="sm" className="w-full text-xs">
+                  <SelectValue placeholder={d.header.selectLanguage} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    {locales.map((item) => (
+                      <SelectItem key={item.code} className="text-xs" value={item.code}>
+                        <span className="mr-1.5">{item.flag}</span>
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1">
+              <Label className="font-medium text-xs">{d.preferences.themePreset}</Label>
               <Select value={themePreset} onValueChange={onThemePresetChange}>
                 <SelectTrigger size="sm" className="w-full text-xs">
                   <SelectValue placeholder="Preset" />
@@ -136,7 +160,7 @@ export function LayoutControls() {
             </div>
 
             <div className="space-y-1">
-              <Label className="font-medium text-xs">Fonts</Label>
+              <Label className="font-medium text-xs">{d.preferences.fonts}</Label>
               <Select value={font} onValueChange={onFontChange}>
                 <SelectTrigger size="sm" className="w-full text-xs">
                   <SelectValue placeholder="Select font" />
@@ -154,7 +178,7 @@ export function LayoutControls() {
             </div>
 
             <div className="space-y-1">
-              <Label className="font-medium text-xs">Theme Mode</Label>
+              <Label className="font-medium text-xs">{d.preferences.themeMode}</Label>
               <ToggleGroup
                 size="sm"
                 spacing={0}
@@ -176,7 +200,7 @@ export function LayoutControls() {
             </div>
 
             <div className="space-y-1">
-              <Label className="font-medium text-xs">Page Layout</Label>
+              <Label className="font-medium text-xs">{d.preferences.contentLayout}</Label>
               <ToggleGroup
                 size="sm"
                 spacing={0}
@@ -185,8 +209,8 @@ export function LayoutControls() {
                 value={contentLayout}
                 onValueChange={onContentLayoutChange}
               >
-                <ToggleGroupItem value="centered" aria-label="Toggle centered">
-                  Centered
+                <ToggleGroupItem value="compact" aria-label="Toggle compact">
+                  Compact
                 </ToggleGroupItem>
                 <ToggleGroupItem value="full-width" aria-label="Toggle full-width">
                   Full Width
@@ -195,7 +219,7 @@ export function LayoutControls() {
             </div>
 
             <div className="space-y-1">
-              <Label className="font-medium text-xs">Navbar Behavior</Label>
+              <Label className="font-medium text-xs">{d.preferences.navbarStyle}</Label>
               <ToggleGroup
                 size="sm"
                 spacing={0}
@@ -214,7 +238,7 @@ export function LayoutControls() {
             </div>
 
             <div className="space-y-1">
-              <Label className="font-medium text-xs">Sidebar Style</Label>
+              <Label className="font-medium text-xs">{d.preferences.sidebarVariant}</Label>
               <ToggleGroup
                 size="sm"
                 spacing={0}
@@ -236,7 +260,7 @@ export function LayoutControls() {
             </div>
 
             <div className="space-y-1">
-              <Label className="font-medium text-xs">Sidebar Collapse Mode</Label>
+              <Label className="font-medium text-xs">{d.preferences.sidebarCollapsible}</Label>
               <ToggleGroup
                 size="sm"
                 spacing={0}
@@ -255,7 +279,7 @@ export function LayoutControls() {
             </div>
 
             <Button type="button" size="sm" variant="outline" className="w-full text-xs" onClick={handleRestore}>
-              Restore Defaults
+              {d.preferences.resetDefaults}
             </Button>
           </div>
         </div>

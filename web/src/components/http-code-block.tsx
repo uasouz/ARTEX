@@ -6,7 +6,41 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useI18n } from "@/lib/i18n/i18n-context";
 import { cn, copyText } from "@/lib/utils";
+
+const I18N = {
+  en: {
+    empty: "(Empty)",
+    disableWrap: "Disable line wrap",
+    enableWrap: "Enable line wrap",
+    copied: "Copied",
+    copyPacket: "Copy packet",
+    copiedPacketAria: "Packet copied",
+    copyFailed: "Copy failed, please press Ctrl/Cmd+A to copy",
+    textboxAria: "HTTP packet code",
+  },
+  pt: {
+    empty: "(Vazio)",
+    disableWrap: "Desativar quebra de linha",
+    enableWrap: "Ativar quebra de linha",
+    copied: "Copiado",
+    copyPacket: "Copiar pacote",
+    copiedPacketAria: "Pacote copiado",
+    copyFailed: "Falha ao copiar, use Ctrl/Cmd+A para copiar",
+    textboxAria: "Código do pacote HTTP",
+  },
+  zh: {
+    empty: "（空）",
+    disableWrap: "关闭自动换行",
+    enableWrap: "开启自动换行",
+    copied: "已复制",
+    copyPacket: "复制报文",
+    copiedPacketAria: "已复制报文",
+    copyFailed: "复制失败，请使用 Ctrl/Cmd+A 后复制",
+    textboxAria: "HTTP 报文代码",
+  },
+};
 
 function statusTone(status: number) {
   if (status >= 500) return "text-red-500";
@@ -58,63 +92,129 @@ function HeaderLine({ line }: { line: string }) {
 }
 
 function JsonBody({ body }: { body: string }) {
-  const parts: React.ReactNode[] = [];
-  const tokens = /("(?:\\.|[^"\\])*")(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g;
-  let cursor = 0;
-  for (const match of body.matchAll(tokens)) {
-    const index = match.index ?? 0;
-    if (index > cursor) parts.push(body.slice(cursor, index));
-    let className = "text-chart-4";
-    if (match[1]) className = match[2] ? "text-primary" : "text-chart-2";
-    else if (match[3]) className = "text-chart-3";
-    parts.push(
-      <span key={`${index}-${match[0].length}`} className={className}>
-        {match[0]}
-      </span>,
-    );
-    cursor = index + match[0].length;
-  }
-  if (cursor < body.length) parts.push(body.slice(cursor));
-  return parts;
+  const tokens = React.useMemo(() => {
+    const list: React.ReactNode[] = [];
+    const pattern = /"([^"\\]|\\.)*"(?=\s*:)|"([^"\\]|\\.)*"|\b(true|false|null)\b|-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?/g;
+    let last = 0;
+    let match = pattern.exec(body);
+    let key = 0;
+    while (match) {
+      if (match.index > last) {
+        list.push(body.slice(last, match.index));
+      }
+      const token = match[0];
+      if (token.endsWith('"') && body[pattern.lastIndex] === ":") {
+        list.push(
+          <span key={key++} className="font-semibold text-primary">
+            {token}
+          </span>,
+        );
+      } else if (token.startsWith('"')) {
+        list.push(
+          <span key={key++} className="text-chart-2">
+            {token}
+          </span>,
+        );
+      } else if (token === "true" || token === "false" || token === "null") {
+        list.push(
+          <span key={key++} className="font-semibold text-amber-500">
+            {token}
+          </span>,
+        );
+      } else {
+        list.push(
+          <span key={key++} className="text-emerald-500">
+            {token}
+          </span>,
+        );
+      }
+      last = pattern.lastIndex;
+      match = pattern.exec(body);
+    }
+    if (last < body.length) {
+      list.push(body.slice(last));
+    }
+    return list;
+  }, [body]);
+
+  return <>{tokens}</>;
 }
 
 function MarkupBody({ body }: { body: string }) {
-  const parts: React.ReactNode[] = [];
-  const tags = /<\/?[A-Za-z][^>]*>|<!--[\s\S]*?-->/g;
-  let cursor = 0;
-  for (const match of body.matchAll(tags)) {
-    const index = match.index ?? 0;
-    if (index > cursor) parts.push(body.slice(cursor, index));
-    parts.push(
-      <span key={`${index}-${match[0].length}`} className="text-primary">
-        {match[0]}
-      </span>,
-    );
-    cursor = index + match[0].length;
-  }
-  if (cursor < body.length) parts.push(body.slice(cursor));
-  return parts;
+  const tokens = React.useMemo(() => {
+    const list: React.ReactNode[] = [];
+    const pattern =
+      /(<\/?[a-zA-Z0-9:-]+)|(\s+[a-zA-Z0-9:-]+(?==))|("([^"\\]|\\.)*"|'([^'\\]|\\.)*')|(&[a-zA-Z0-9#]+;)/g;
+    let last = 0;
+    let match = pattern.exec(body);
+    let key = 0;
+    while (match) {
+      if (match.index > last) {
+        list.push(body.slice(last, match.index));
+      }
+      const token = match[0];
+      if (match[1]) {
+        list.push(
+          <span key={key++} className="font-semibold text-primary">
+            {token}
+          </span>,
+        );
+      } else if (match[2]) {
+        list.push(
+          <span key={key++} className="text-amber-500">
+            {token}
+          </span>,
+        );
+      } else if (match[3]) {
+        list.push(
+          <span key={key++} className="text-chart-2">
+            {token}
+          </span>,
+        );
+      } else if (match[6]) {
+        list.push(
+          <span key={key++} className="text-blue-500">
+            {token}
+          </span>,
+        );
+      }
+      last = pattern.lastIndex;
+      match = pattern.exec(body);
+    }
+    if (last < body.length) {
+      list.push(body.slice(last));
+    }
+    return list;
+  }, [body]);
+
+  return <>{tokens}</>;
 }
 
-type BodyFormat = "json" | "markup" | "plain";
-
-function detectBodyFormat(body: string): BodyFormat {
-  const trimmed = body.trimStart();
-  if (trimmed.startsWith("{") || trimmed.startsWith("[")) return "json";
-  if (trimmed.startsWith("<")) return "markup";
+function detectBodyFormat(body: string): "json" | "markup" | "plain" {
+  const trimmed = body.trim();
+  if (!trimmed) return "plain";
+  if ((trimmed.startsWith("{") && trimmed.endsWith("}")) || (trimmed.startsWith("[") && trimmed.endsWith("]"))) {
+    return "json";
+  }
+  if (trimmed.startsWith("<") && trimmed.endsWith(">")) {
+    return "markup";
+  }
   return "plain";
 }
 
-function HighlightedBody({ body, format }: { body: string; format: BodyFormat }) {
+function HighlightedBody({ body, format }: { body: string; format: "json" | "markup" | "plain" }) {
   if (format === "json") return <JsonBody body={body} />;
   if (format === "markup") return <MarkupBody body={body} />;
   return body;
 }
 
 export function HttpCodeBlock({ raw }: { raw: string }) {
+  const { locale } = useI18n();
+  const t = I18N[locale] ?? I18N.en;
+
   const [wrapLines, setWrapLines] = React.useState(true);
   const [copied, setCopied] = React.useState(false);
-  const value = raw || "（空）";
+  const value = raw || t.empty;
   const lines = value.replaceAll("\r\n", "\n").split("\n");
   const separator = lines.indexOf("");
   const body = separator >= 0 ? lines.slice(separator + 1).join("\n") : "";
@@ -132,7 +232,7 @@ export function HttpCodeBlock({ raw }: { raw: string }) {
       setCopied(true);
       return;
     }
-    toast.error("复制失败，请使用 Ctrl/Cmd+A 后复制");
+    toast.error(t.copyFailed);
   };
 
   const renderLine = (line: string, index: number) => {
@@ -151,14 +251,14 @@ export function HttpCodeBlock({ raw }: { raw: string }) {
               type="button"
               variant="ghost"
               size="icon-xs"
-              aria-label={wrapLines ? "关闭自动换行" : "开启自动换行"}
+              aria-label={wrapLines ? t.disableWrap : t.enableWrap}
               aria-pressed={wrapLines}
               onClick={() => setWrapLines((current) => !current)}
             >
               <WrapTextIcon />
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="bottom">{wrapLines ? "关闭自动换行" : "开启自动换行"}</TooltipContent>
+          <TooltipContent side="bottom">{wrapLines ? t.disableWrap : t.enableWrap}</TooltipContent>
         </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -166,19 +266,19 @@ export function HttpCodeBlock({ raw }: { raw: string }) {
               type="button"
               variant="ghost"
               size="icon-xs"
-              aria-label={copied ? "已复制报文" : "复制报文"}
+              aria-label={copied ? t.copiedPacketAria : t.copyPacket}
               onClick={() => void copyPacket()}
             >
               {copied ? <CheckIcon /> : <CopyIcon />}
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="bottom">{copied ? "已复制" : "复制报文"}</TooltipContent>
+          <TooltipContent side="bottom">{copied ? t.copied : t.copyPacket}</TooltipContent>
         </Tooltip>
       </div>
       {/* biome-ignore lint/a11y/useSemanticElements: textarea cannot preserve line numbers and syntax-highlighting markup. */}
       <div
         role="textbox"
-        aria-label="HTTP 报文代码"
+        aria-label={t.textboxAria}
         aria-multiline="true"
         aria-readonly="true"
         tabIndex={0}
@@ -195,19 +295,19 @@ export function HttpCodeBlock({ raw }: { raw: string }) {
         }}
       >
         {lines.map((line, index) => (
-          <div
-            key={`${index}-${line}`}
-            data-line={index + 1}
-            className="grid min-w-0 grid-cols-[1.5rem_minmax(0,1fr)] leading-relaxed before:sticky before:left-0 before:self-stretch before:border-r before:bg-muted/20 before:px-1 before:text-right before:text-muted-foreground/60 before:content-[attr(data-line)]"
-          >
-            <code
+          // biome-ignore lint/suspicious/noArrayIndexKey: line numbers are stable
+          <div key={index} className="flex leading-5 hover:bg-muted/40">
+            <span className="w-10 shrink-0 select-none pr-3 text-right text-[11px] text-muted-foreground/50 tabular-nums">
+              {index + 1}
+            </span>
+            <span
               className={cn(
-                "min-h-[1lh] min-w-0 pr-16 pl-1.5 [tab-size:4]",
-                wrapLines ? "break-words whitespace-pre-wrap" : "whitespace-pre",
+                "min-w-0 flex-1 pr-4 whitespace-pre",
+                wrapLines ? "whitespace-pre-wrap break-all" : "overflow-x-auto",
               )}
             >
               {renderLine(line, index)}
-            </code>
+            </span>
           </div>
         ))}
       </div>

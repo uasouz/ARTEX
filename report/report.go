@@ -19,6 +19,7 @@ type Input struct {
 	GeneratedAt time.Time
 	AssetCounts map[string]int
 	Findings    []*db.Node
+	Locale      string // "en", "pt", or "zh" (default: "en")
 }
 
 type findingView struct {
@@ -45,45 +46,136 @@ func parseFinding(n *db.Node) findingView {
 
 var sevRank = map[string]int{"critical": 0, "high": 1, "medium": 2, "low": 3, "": 4}
 
-// Markdown renders the report.
+// Markdown renders the report in English, Portuguese, or Chinese.
 func Markdown(in Input) string {
+	loc := strings.ToLower(strings.TrimSpace(in.Locale))
+	if loc != "pt" && loc != "zh" {
+		loc = "en"
+	}
+
 	var b strings.Builder
-	fmt.Fprintf(&b, "# 渗透测试报告 — %s\n\n", nz(in.Title, "未命名任务"))
-	fmt.Fprintf(&b, "- **任务目标**：%s\n", nz(in.Goal, "（未指定）"))
-	fmt.Fprintf(&b, "- **生成时间**：%s\n\n", in.GeneratedAt.Format("2006-01-02 15:04:05"))
 
-	// summary
-	fmt.Fprintf(&b, "## 摘要\n\n")
-	fmt.Fprintf(&b, "- 确认发现：**%d** 个\n", len(in.Findings))
-	fmt.Fprintf(&b, "- 资产：")
-	var types []string
-	for t := range in.AssetCounts {
-		types = append(types, t)
-	}
-	sort.Strings(types)
-	for i, t := range types {
-		if i > 0 {
-			b.WriteString("、")
-		}
-		fmt.Fprintf(&b, "%s %d", t, in.AssetCounts[t])
-	}
-	b.WriteString("\n\n")
+	switch loc {
+	case "pt":
+		fmt.Fprintf(&b, "# CIRDAN ARTEX — Relatório de Teste de Intrusão: %s\n\n", nz(in.Title, "Tarefa sem nome"))
+		fmt.Fprintf(&b, "- **Objetivo da Avaliação**: %s\n", nz(in.Goal, "（Não especificado）"))
+		fmt.Fprintf(&b, "- **Gerado em**: %s\n\n", in.GeneratedAt.Format("2006-01-02 15:04:05"))
 
-	// findings
-	fmt.Fprintf(&b, "## 发现\n\n")
-	if len(in.Findings) == 0 {
-		b.WriteString("_本次未确认漏洞。_\n\n")
-	} else {
-		fs := make([]findingView, 0, len(in.Findings))
-		for _, n := range in.Findings {
-			fs = append(fs, parseFinding(n))
+		// summary
+		fmt.Fprintf(&b, "## Resumo Executivo\n\n")
+		fmt.Fprintf(&b, "- Vulnerabilidades Confirmadas: **%d**\n", len(in.Findings))
+		fmt.Fprintf(&b, "- Ativos no Escopo: ")
+		var types []string
+		for t := range in.AssetCounts {
+			types = append(types, t)
 		}
-		sort.SliceStable(fs, func(i, j int) bool { return sevRank[fs[i].Severity] < sevRank[fs[j].Severity] })
-		for i, f := range fs {
-			fmt.Fprintf(&b, "### %d. [%s] %s\n\n", i+1, strings.ToUpper(nz(f.Severity, "info")), nz(f.Name, nz(f.VulnClass, "未分类")))
-			fmt.Fprintf(&b, "%s\n\n", nz(f.Summary, ""))
-			if f.PoC != "" {
-				fmt.Fprintf(&b, "**PoC / 证据：**\n\n```\n%s\n```\n\n", f.PoC)
+		sort.Strings(types)
+		for i, t := range types {
+			if i > 0 {
+				b.WriteString(", ")
+			}
+			fmt.Fprintf(&b, "%s: %d", t, in.AssetCounts[t])
+		}
+		b.WriteString("\n\n")
+
+		// findings
+		fmt.Fprintf(&b, "## Vulnerabilidades Identificadas\n\n")
+		if len(in.Findings) == 0 {
+			b.WriteString("_Nenhuma vulnerabilidade confirmada nesta execução._\n\n")
+		} else {
+			fs := make([]findingView, 0, len(in.Findings))
+			for _, n := range in.Findings {
+				fs = append(fs, parseFinding(n))
+			}
+			sort.SliceStable(fs, func(i, j int) bool { return sevRank[fs[i].Severity] < sevRank[fs[j].Severity] })
+			for i, f := range fs {
+				fmt.Fprintf(&b, "### %d. [%s] %s\n\n", i+1, strings.ToUpper(nz(f.Severity, "INFO")), nz(f.Name, nz(f.VulnClass, "Sem categoria")))
+				fmt.Fprintf(&b, "%s\n\n", nz(f.Summary, ""))
+				if f.PoC != "" {
+					fmt.Fprintf(&b, "**Prova de Conceito (PoC) / Evidência:**\n\n```\n%s\n```\n\n", f.PoC)
+				}
+			}
+		}
+
+	case "zh":
+		fmt.Fprintf(&b, "# 渗透测试报告 — %s\n\n", nz(in.Title, "未命名任务"))
+		fmt.Fprintf(&b, "- **任务目标**：%s\n", nz(in.Goal, "（未指定）"))
+		fmt.Fprintf(&b, "- **生成时间**：%s\n\n", in.GeneratedAt.Format("2006-01-02 15:04:05"))
+
+		// summary
+		fmt.Fprintf(&b, "## 摘要\n\n")
+		fmt.Fprintf(&b, "- 确认发现：**%d** 个\n", len(in.Findings))
+		fmt.Fprintf(&b, "- 资产：")
+		var types []string
+		for t := range in.AssetCounts {
+			types = append(types, t)
+		}
+		sort.Strings(types)
+		for i, t := range types {
+			if i > 0 {
+				b.WriteString("、")
+			}
+			fmt.Fprintf(&b, "%s %d", t, in.AssetCounts[t])
+		}
+		b.WriteString("\n\n")
+
+		// findings
+		fmt.Fprintf(&b, "## 发现\n\n")
+		if len(in.Findings) == 0 {
+			b.WriteString("_本次未确认漏洞。_\n\n")
+		} else {
+			fs := make([]findingView, 0, len(in.Findings))
+			for _, n := range in.Findings {
+				fs = append(fs, parseFinding(n))
+			}
+			sort.SliceStable(fs, func(i, j int) bool { return sevRank[fs[i].Severity] < sevRank[fs[j].Severity] })
+			for i, f := range fs {
+				fmt.Fprintf(&b, "### %d. [%s] %s\n\n", i+1, strings.ToUpper(nz(f.Severity, "info")), nz(f.Name, nz(f.VulnClass, "未分类")))
+				fmt.Fprintf(&b, "%s\n\n", nz(f.Summary, ""))
+				if f.PoC != "" {
+					fmt.Fprintf(&b, "**PoC / 证据：**\n\n```\n%s\n```\n\n", f.PoC)
+				}
+			}
+		}
+
+	default: // "en"
+		fmt.Fprintf(&b, "# CIRDAN ARTEX — Security Assessment Report: %s\n\n", nz(in.Title, "Unnamed Task"))
+		fmt.Fprintf(&b, "- **Assessment Objective**: %s\n", nz(in.Goal, "(Not specified)"))
+		fmt.Fprintf(&b, "- **Generated At**: %s\n\n", in.GeneratedAt.Format("2006-01-02 15:04:05 UTC"))
+
+		// summary
+		fmt.Fprintf(&b, "## Executive Summary\n\n")
+		fmt.Fprintf(&b, "- Confirmed Findings: **%d**\n", len(in.Findings))
+		fmt.Fprintf(&b, "- Target Assets Monitored: ")
+		var types []string
+		for t := range in.AssetCounts {
+			types = append(types, t)
+		}
+		sort.Strings(types)
+		for i, t := range types {
+			if i > 0 {
+				b.WriteString(", ")
+			}
+			fmt.Fprintf(&b, "%s: %d", t, in.AssetCounts[t])
+		}
+		b.WriteString("\n\n")
+
+		// findings
+		fmt.Fprintf(&b, "## Identified Vulnerabilities\n\n")
+		if len(in.Findings) == 0 {
+			b.WriteString("_No vulnerabilities confirmed in this assessment cycle._\n\n")
+		} else {
+			fs := make([]findingView, 0, len(in.Findings))
+			for _, n := range in.Findings {
+				fs = append(fs, parseFinding(n))
+			}
+			sort.SliceStable(fs, func(i, j int) bool { return sevRank[fs[i].Severity] < sevRank[fs[j].Severity] })
+			for i, f := range fs {
+				fmt.Fprintf(&b, "### %d. [%s] %s\n\n", i+1, strings.ToUpper(nz(f.Severity, "INFO")), nz(f.Name, nz(f.VulnClass, "Uncategorized")))
+				fmt.Fprintf(&b, "%s\n\n", nz(f.Summary, ""))
+				if f.PoC != "" {
+					fmt.Fprintf(&b, "**Proof of Concept / Evidence:**\n\n```\n%s\n```\n\n", f.PoC)
+				}
 			}
 		}
 	}

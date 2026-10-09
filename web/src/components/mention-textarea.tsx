@@ -12,12 +12,74 @@ import { api } from "@/lib/api";
 import {
   activeMention,
   type ChatMention,
-  mentionKinds,
+  type MentionKind,
+  mentionLabel,
   mentionSearch,
   mentionToken,
   selectedMentions,
 } from "@/lib/chat-mentions";
+import { useI18n } from "@/lib/i18n/i18n-context";
 import { cn } from "@/lib/utils";
+
+const I18N = {
+  en: {
+    defaultAriaLabel: "Message, type @ to reference records",
+    popoverAria: "Select reference record",
+    selectType: "Select reference type",
+    searchKind: "Search {kind}",
+    allRecords: "All records",
+    keyHint: "↑↓ Select · Enter Confirm · Esc Close",
+    listboxAria: "Reference candidates",
+    searching: "Searching...",
+    searchFailed: "Search failed: {err}. Please retype to retry.",
+    noMatching: "No matching records, please try a different name, address, or ID",
+    loadingMore: "Loading more...",
+    pageError: "Load failed, click to retry",
+    showingCount: "Showing {count}, scroll down to load more",
+    showingAll: "Showing all {count}",
+    searchPrompt: "Type name, address, or ID to search records",
+    removeAria: "Remove reference {label}",
+    footerHint: "Latest details fetched upon send · Max 10 references",
+  },
+  pt: {
+    defaultAriaLabel: "Mensagem, digite @ para citar registros",
+    popoverAria: "Selecionar registro de referência",
+    selectType: "Selecionar tipo de referência",
+    searchKind: "Pesquisar {kind}",
+    allRecords: "Todos os registros",
+    keyHint: "↑↓ Selecionar · Enter Confirmar · Esc Fechar",
+    listboxAria: "Candidatos de referência",
+    searching: "Pesquisando...",
+    searchFailed: "Falha na pesquisa: {err}. Digite novamente.",
+    noMatching: "Nenhum registro correspondente, tente outro nome, endereço ou ID",
+    loadingMore: "Carregando mais...",
+    pageError: "Falha ao carregar, clique para tentar novamente",
+    showingCount: "Exibindo {count}, role para carregar mais",
+    showingAll: "Exibindo todos os {count}",
+    searchPrompt: "Digite nome, endereço ou ID para pesquisar registros",
+    removeAria: "Remover citação {label}",
+    footerHint: "Detalhes atualizados ao enviar · Máximo de 10 citações",
+  },
+  zh: {
+    defaultAriaLabel: "消息，输入 @ 引用记录",
+    popoverAria: "选择引用记录",
+    selectType: "选择引用类型",
+    searchKind: "搜索{kind}",
+    allRecords: "全部记录",
+    keyHint: "↑↓ 选择 · Enter 确认 · Esc 关闭",
+    listboxAria: "引用候选",
+    searching: "搜索中…",
+    searchFailed: "搜索失败：{err}。请重新输入重试。",
+    noMatching: "没有匹配记录，请更换名称、地址或 ID",
+    loadingMore: "正在加载更多…",
+    pageError: "加载失败，点击重试",
+    showingCount: "已显示 {count} 条，向下滚动加载更多",
+    showingAll: "已显示全部 {count} 条",
+    searchPrompt: "输入名称、地址或 ID 搜索记录",
+    removeAria: "移除引用 {label}",
+    footerHint: "发送时读取最新详情 · 最多 10 条",
+  },
+};
 
 type Props = Omit<React.ComponentProps<"textarea">, "value" | "onChange" | "ref"> & {
   value: string;
@@ -26,6 +88,9 @@ type Props = Omit<React.ComponentProps<"textarea">, "value" | "onChange" | "ref"
 };
 
 export function MentionTextarea({ value, onValueChange, onKeyDown, className, inputGroup, disabled, ...props }: Props) {
+  const { locale } = useI18n();
+  const t = I18N[locale] ?? I18N.en;
+
   const textarea = React.useRef<HTMLTextAreaElement>(null);
   const composing = React.useRef(false);
   const pendingKeyboardIndex = React.useRef<number | null>(null);
@@ -43,7 +108,7 @@ export function MentionTextarea({ value, onValueChange, onKeyDown, className, in
   const request = React.useRef<{ key: string; controller: AbortController; loadingMore: boolean } | null>(null);
   const listId = React.useId();
   const active = cursor === null ? null : activeMention(value, cursor);
-  const search = mentionSearch(active?.query ?? "");
+  const search = mentionSearch(active?.query ?? "", locale);
   const open = !!active && !dismissed && !disabled;
   const categories = search.categories;
   const requestKey = open && !categories.length ? `${search.kind}:${search.query}` : "";
@@ -66,8 +131,8 @@ export function MentionTextarea({ value, onValueChange, onKeyDown, className, in
         (page) => {
           if (!controller.signal.aborted) setResult({ key: requestKey, ...page });
         },
-        (error: Error) => {
-          if (!controller.signal.aborted) setResult({ key: requestKey, items: [], error: error.message });
+        (fetchErr: Error) => {
+          if (!controller.signal.aborted) setResult({ key: requestKey, items: [], error: fetchErr.message });
         },
       );
     }, 180);
@@ -107,10 +172,10 @@ export function MentionTextarea({ value, onValueChange, onKeyDown, className, in
             };
           });
         },
-        (error: Error) => {
+        (fetchErr: Error) => {
           if (!session.controller.signal.aborted)
             setResult((current) =>
-              current?.key === session.key ? { ...current, loadingMore: false, pageError: error.message } : current,
+              current?.key === session.key ? { ...current, loadingMore: false, pageError: fetchErr.message } : current,
             );
         },
       )
@@ -146,7 +211,7 @@ export function MentionTextarea({ value, onValueChange, onKeyDown, className, in
 
   function choose(index: number) {
     if (categories[index]) replaceActive(`@${categories[index].label} `, false);
-    else if (items[index]) replaceActive(`${mentionToken(items[index])} `, true);
+    else if (items[index]) replaceActive(`${mentionToken(items[index], locale)} `, true);
   }
 
   function keyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -198,7 +263,7 @@ export function MentionTextarea({ value, onValueChange, onKeyDown, className, in
               value={value}
               disabled={disabled}
               className={className}
-              aria-label={props["aria-label"] ?? "消息，输入 @ 引用记录"}
+              aria-label={props["aria-label"] ?? t.defaultAriaLabel}
               aria-autocomplete="list"
               aria-controls={open ? listId : undefined}
               aria-expanded={open}
@@ -230,20 +295,23 @@ export function MentionTextarea({ value, onValueChange, onKeyDown, className, in
           onInteractOutside={(event) => {
             if (event.target === textarea.current) event.preventDefault();
           }}
-          aria-label="选择引用记录"
+          aria-label={t.popoverAria}
         >
           <div className="flex items-center justify-between px-2 py-1 text-muted-foreground text-xs">
             <span>
               {categories.length
-                ? "选择引用类型"
-                : `搜索${mentionKinds.find((kind) => kind.kind === search.kind)?.label ?? "全部记录"}`}
+                ? t.selectType
+                : t.searchKind.replace(
+                    "{kind}",
+                    search.kind ? mentionLabel(search.kind as MentionKind, locale) : t.allRecords,
+                  )}
             </span>
-            <span>↑↓ 选择 · Enter 确认 · Esc 关闭</span>
+            <span>{t.keyHint}</span>
           </div>
           <div
             id={listId}
             role="listbox"
-            aria-label="引用候选"
+            aria-label={t.listboxAria}
             className="max-h-60 overflow-y-auto"
             onScroll={(event) => {
               const list = event.currentTarget;
@@ -272,17 +340,17 @@ export function MentionTextarea({ value, onValueChange, onKeyDown, className, in
             {!categories.length && loading && (
               <div role="status" className="flex items-center gap-2 p-3 text-muted-foreground text-sm">
                 <Loader2Icon className="size-4 animate-spin" />
-                搜索中…
+                {t.searching}
               </div>
             )}
             {!categories.length && !loading && error && (
               <div role="alert" className="p-3 text-destructive text-sm">
-                搜索失败：{error}。请重新输入重试。
+                {t.searchFailed.replace("{err}", error)}
               </div>
             )}
             {!categories.length && !loading && !error && !items.length && (
               <div role="status" className="p-3 text-muted-foreground text-sm">
-                没有匹配记录，请更换名称、地址或 ID
+                {t.noMatching}
               </div>
             )}
             {items.map((item, index) => (
@@ -300,7 +368,7 @@ export function MentionTextarea({ value, onValueChange, onKeyDown, className, in
                 onClick={() => choose(index)}
               >
                 <span className="flex w-full items-center gap-2">
-                  <Badge variant="outline">{mentionKinds.find((kind) => kind.kind === item.kind)?.label}</Badge>
+                  <Badge variant="outline">{mentionLabel(item.kind, locale)}</Badge>
                   <span className="truncate text-sm">{item.label}</span>
                   <span className="ml-auto shrink-0 text-muted-foreground text-xs">#{item.id}</span>
                 </span>
@@ -310,17 +378,19 @@ export function MentionTextarea({ value, onValueChange, onKeyDown, className, in
           </div>
           {!categories.length && (
             <p className="px-2 py-1 text-muted-foreground text-xs">
-              {loadingMore && <span role="status">正在加载更多…</span>}
+              {loadingMore && <span role="status">{t.loadingMore}</span>}
               {!loadingMore && nextCursor && (
                 <button type="button" onMouseDown={(event) => event.preventDefault()} onClick={loadMore}>
-                  {pageError ? "加载失败，点击重试" : `已显示 ${items.length} 条，向下滚动加载更多`}
+                  {pageError ? t.pageError : t.showingCount.replace("{count}", String(items.length))}
                 </button>
               )}
-              {!loadingMore && !nextCursor && !loading && !error && items.length > 0 && `已显示全部 ${items.length} 条`}
               {!loadingMore &&
                 !nextCursor &&
-                (loading || !!error || items.length === 0) &&
-                "输入名称、地址或 ID 搜索记录"}
+                !loading &&
+                !error &&
+                items.length > 0 &&
+                t.showingAll.replace("{count}", String(items.length))}
+              {!loadingMore && !nextCursor && (loading || !!error || items.length === 0) && t.searchPrompt}
             </p>
           )}
         </PopoverContent>
@@ -335,7 +405,7 @@ export function MentionTextarea({ value, onValueChange, onKeyDown, className, in
               <button
                 type="button"
                 disabled={disabled}
-                aria-label={`移除引用 ${item.label}`}
+                aria-label={t.removeAria.replace("{label}", item.label)}
                 onClick={() => {
                   onValueChange(value.slice(0, item.start) + value.slice(item.start + item.token.length));
                   setCursor(null);
@@ -345,7 +415,7 @@ export function MentionTextarea({ value, onValueChange, onKeyDown, className, in
               </button>
             </Badge>
           ))}
-          <span className="text-muted-foreground text-xs">发送时读取最新详情 · 最多 10 条</span>
+          <span className="text-muted-foreground text-xs">{t.footerHint}</span>
         </div>
       )}
     </div>

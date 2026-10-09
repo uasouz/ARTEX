@@ -6,6 +6,7 @@ import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { APP_CONFIG } from "@/config/app-config";
 import { fontVars } from "@/lib/fonts/registry";
+import { I18nProvider } from "@/lib/i18n/i18n-context";
 import { PREFERENCE_DEFAULTS } from "@/lib/preferences/preferences-config";
 import { ThemeBootScript } from "@/scripts/theme-boot";
 import { PreferencesStoreProvider } from "@/stores/preferences/preferences-provider";
@@ -38,16 +39,18 @@ export default function RootLayout({ children }: Readonly<{ children: ReactNode 
       </head>
       <body className={`${fontVars} min-h-screen antialiased`}>
         <TooltipProvider>
-          <PreferencesStoreProvider
-            themeMode={theme_mode}
-            themePreset={theme_preset}
-            contentLayout={content_layout}
-            navbarStyle={navbar_style}
-            font={font}
-          >
-            {children}
-            <Toaster />
-          </PreferencesStoreProvider>
+          <I18nProvider>
+            <PreferencesStoreProvider
+              themeMode={theme_mode}
+              themePreset={theme_preset}
+              contentLayout={content_layout}
+              navbarStyle={navbar_style}
+              font={font}
+            >
+              {children}
+              <Toaster />
+            </PreferencesStoreProvider>
+          </I18nProvider>
         </TooltipProvider>
       </body>
     </html>

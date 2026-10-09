@@ -2150,6 +2150,12 @@ func (s *Server) findingsExport(w http.ResponseWriter, r *http.Request) {
 	}
 	now := time.Now()
 	stamp := now.Format("20060102-150405")
+	loc := r.URL.Query().Get("locale")
+	if loc == "" {
+		if c, err := r.Cookie("cirdan_locale"); err == nil && c.Value != "" {
+			loc = c.Value
+		}
+	}
 	setDownload := func(contentType, filename string) {
 		w.Header().Set("Content-Type", contentType)
 		w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
@@ -2158,10 +2164,10 @@ func (s *Server) findingsExport(w http.ResponseWriter, r *http.Request) {
 	switch format {
 	case "md-single":
 		setDownload("text/markdown; charset=utf-8", "findings-"+stamp+".md")
-		_, _ = w.Write([]byte(report.FindingsMarkdown(fs, now)))
+		_, _ = w.Write([]byte(report.FindingsMarkdown(fs, now, loc)))
 	case "md-zip":
 		path := filepath.Join(stage, "findings.zip")
-		if err := buildFindingsEvidenceZip(path, fs, stage, now); err != nil {
+		if err := buildFindingsEvidenceZip(path, fs, stage, now, loc); err != nil {
 			writeErr(w, 500, err.Error())
 			return
 		}
@@ -2175,7 +2181,7 @@ func (s *Server) findingsExport(w http.ResponseWriter, r *http.Request) {
 		http.ServeContent(w, r, "findings.zip", now, file)
 	case "csv":
 		setDownload("text/csv; charset=utf-8", "findings-"+stamp+".csv")
-		_, _ = w.Write(report.FindingsCSV(fs))
+		_, _ = w.Write(report.FindingsCSV(fs, loc))
 	case "json":
 		assets := s.resolveFindingAssets(fs)
 		out := make([]FindingDTO, 0, len(fs))
@@ -3852,9 +3858,16 @@ func (s *Server) getReport(w http.ResponseWriter, r *http.Request) {
 			counts[ty] = len(ns)
 		}
 	}
+	loc := r.URL.Query().Get("locale")
+	if loc == "" {
+		if c, err := r.Cookie("cirdan_locale"); err == nil && c.Value != "" {
+			loc = c.Value
+		}
+	}
 	md := report.Markdown(report.Input{
 		Title: t.Description, Goal: t.Goal, GeneratedAt: time.Now(),
 		AssetCounts: counts, Findings: findings,
+		Locale: loc,
 	})
 	w.Header().Set("Content-Type", "text/markdown; charset=utf-8")
 	w.WriteHeader(200)

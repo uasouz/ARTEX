@@ -17,41 +17,200 @@ import { Switch } from "@/components/ui/switch";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/lib/api";
+import { useI18n } from "@/lib/i18n/i18n-context";
 import type { AssetInterceptKind, AssetInterceptRule } from "@/lib/types";
 
-// ---- kind 元信息 ----
+export interface KindOption {
+  value: AssetInterceptKind;
+  label: string;
+  group: string;
+  placeholder: string;
+}
 
-const KIND_OPTIONS: { value: AssetInterceptKind; label: string; group: string; placeholder: string }[] = [
-  { value: "exact_domain", label: "域名（全等）", group: "全等匹配", placeholder: "example.gov.cn" },
-  { value: "exact_ip", label: "IP（全等）", group: "全等匹配", placeholder: "203.0.113.10" },
-  { value: "exact_url", label: "URL（全等）", group: "全等匹配", placeholder: "https://example.gov.cn/login" },
-  { value: "fuzzy_domain", label: "域名（模糊）", group: "模糊匹配", placeholder: ".gov.cn" },
-  { value: "fuzzy_ip", label: "IP（模糊）", group: "模糊匹配", placeholder: "203.0.113." },
-  { value: "fuzzy_url", label: "URL（模糊）", group: "模糊匹配", placeholder: "/admin" },
-  { value: "cidr", label: "CIDR 网段", group: "网段", placeholder: "192.168.0.0/16" },
-];
+export function getKindOptions(locale = "en"): KindOption[] {
+  const isPt = locale === "pt";
+  const isZh = locale === "zh";
 
-const KIND_LABEL: Record<AssetInterceptKind, string> = Object.fromEntries(
-  KIND_OPTIONS.map((o) => [o.value, o.label]),
-) as Record<AssetInterceptKind, string>;
+  const gExact = isPt ? "Correspondência Exata" : isZh ? "全等匹配" : "Exact Match";
+  const gFuzzy = isPt ? "Correspondência Parcial" : isZh ? "模糊匹配" : "Fuzzy Match";
+  const gCidr = isPt ? "Faixa CIDR" : isZh ? "网段" : "CIDR Subnet";
 
-const KIND_GROUPS = ["全等匹配", "模糊匹配", "网段"];
+  return [
+    {
+      value: "exact_domain",
+      label: isPt ? "Domínio (Exato)" : isZh ? "域名（全等）" : "Domain (Exact)",
+      group: gExact,
+      placeholder: "example.gov.cn",
+    },
+    {
+      value: "exact_ip",
+      label: isPt ? "IP (Exato)" : isZh ? "IP（全等）" : "IP (Exact)",
+      group: gExact,
+      placeholder: "203.0.113.10",
+    },
+    {
+      value: "exact_url",
+      label: isPt ? "URL (Exato)" : isZh ? "URL（全等）" : "URL (Exact)",
+      group: gExact,
+      placeholder: "https://example.gov.cn/login",
+    },
+    {
+      value: "fuzzy_domain",
+      label: isPt ? "Domínio (Parcial)" : isZh ? "域名（模糊）" : "Domain (Fuzzy)",
+      group: gFuzzy,
+      placeholder: ".gov.cn",
+    },
+    {
+      value: "fuzzy_ip",
+      label: isPt ? "IP (Parcial)" : isZh ? "IP（模糊）" : "IP (Prefix/Fuzzy)",
+      group: gFuzzy,
+      placeholder: "203.0.113.",
+    },
+    {
+      value: "fuzzy_url",
+      label: isPt ? "URL (Parcial)" : isZh ? "URL（模糊）" : "URL (Path/Fuzzy)",
+      group: gFuzzy,
+      placeholder: "/admin",
+    },
+    {
+      value: "cidr",
+      label: isPt ? "Sub-rede CIDR" : isZh ? "CIDR 网段" : "CIDR Subnet",
+      group: gCidr,
+      placeholder: "192.168.0.0/16",
+    },
+  ];
+}
 
-function KindBadge({ kind }: { kind: AssetInterceptKind }) {
+export function kindMeta(kind: AssetInterceptKind, locale = "en"): KindOption {
+  const opts = getKindOptions(locale);
+  return opts.find((o) => o.value === kind) ?? opts[0];
+}
+
+const I18N = {
+  en: {
+    pageTitle: "Asset Scope Interception",
+    pageSubtitle:
+      "Global asset blocklist: matched domains, IPs, URLs, or subnets will be blocked across all operations",
+    infoTip:
+      "Supports exact and fuzzy domain, IP, URL matches, and CIDR subnets. Default rules protect government and educational infrastructure.",
+    newRuleBtn: "New Rule",
+    loading: "Loading...",
+    empty: "No asset interception rules configured.",
+    emptyAction: "Create First Rule",
+    thType: "Type",
+    thPattern: "Pattern",
+    thRemark: "Notes",
+    thEnabled: "Enabled",
+    builtinBadge: "Built-in",
+    sheetTitleEdit: "Edit Asset Interception Rule",
+    sheetTitleNew: "New Asset Interception Rule",
+    sheetDesc: "Target assets matching this pattern will be blocked globally.",
+    fieldMatchKind: "Match Type",
+    fieldPattern: "Pattern",
+    helpCidr: "CIDR subnet, e.g. 192.168.0.0/16",
+    helpFuzzy: "Fuzzy match: targets containing this value will be blocked",
+    helpExact: "Exact match: target must match this value exactly",
+    fieldRemark: "Notes (Optional)",
+    fieldRemarkPlaceholder: "Explain the purpose of this rule",
+    enableRuleLabel: "Enable this rule",
+    cancel: "Cancel",
+    save: "Save",
+    saving: "Saving...",
+    errPatternRequired: "Pattern cannot be empty",
+    errCidrInvalid: "Invalid CIDR format (e.g. 192.168.0.0/16)",
+    toastLoadFailed: "Failed to load asset interception rules",
+    toastUpdated: "Rule updated",
+    toastCreated: "Rule created",
+    confirmDelete: (p: string) => `Delete asset interception rule \"${p}\"?`,
+    toastDeleted: "Rule deleted",
+  },
+  pt: {
+    pageTitle: "Interceptação de Escopo de Ativos",
+    pageSubtitle:
+      "Lista de bloqueio global: domínios, IPs, URLs ou sub-redes correspondentes serão bloqueados globalmente",
+    infoTip:
+      "Suporta domínios exatos e parciais, IPs, URLs e sub-redes CIDR. Regras padrão protegem infraestruturas governamentais e educacionais.",
+    newRuleBtn: "Nova Regra",
+    loading: "Carregando...",
+    empty: "Nenhuma regra de interceptação de ativos configurada.",
+    emptyAction: "Criar Primeira Regra",
+    thType: "Tipo",
+    thPattern: "Padrão",
+    thRemark: "Observações",
+    thEnabled: "Ativo",
+    builtinBadge: "Integrado",
+    sheetTitleEdit: "Editar Regra de Interceptação de Ativo",
+    sheetTitleNew: "Nova Regra de Interceptação de Ativo",
+    sheetDesc: "Ativos correspondentes a este padrão serão bloqueados globalmente.",
+    fieldMatchKind: "Tipo de Correspondência",
+    fieldPattern: "Padrão",
+    helpCidr: "Sub-rede CIDR, ex: 192.168.0.0/16",
+    helpFuzzy: "Correspondência parcial: alvos contendo este valor serão bloqueados",
+    helpExact: "Correspondência exata: o alvo deve corresponder exatamente",
+    fieldRemark: "Observações (Opcional)",
+    fieldRemarkPlaceholder: "Explique a finalidade desta regra",
+    enableRuleLabel: "Ativar esta regra",
+    cancel: "Cancelar",
+    save: "Salvar",
+    saving: "Salvando...",
+    errPatternRequired: "O padrão não pode ser vazio",
+    errCidrInvalid: "Formato CIDR inválido (ex: 192.168.0.0/16)",
+    toastLoadFailed: "Falha ao carregar regras de interceptação",
+    toastUpdated: "Regra atualizada",
+    toastCreated: "Regra criada",
+    confirmDelete: (p: string) => `Excluir regra de interceptação \"${p}\"?`,
+    toastDeleted: "Regra excluída",
+  },
+  zh: {
+    pageTitle: "资产拦截",
+    pageSubtitle: "全局资产黑名单：命中的域名 / IP / URL / 网段将被拦截，不对其执行任何操作",
+    infoTip:
+      "支持全等与模糊匹配的域名 / IP / URL，以及 CIDR 网段；默认内置模糊拦截政府（.gov / .gov.cn）与教育（.edu / .edu.cn）网站",
+    newRuleBtn: "新建规则",
+    loading: "加载中…",
+    empty: "暂无资产拦截规则",
+    emptyAction: "新建第一条规则",
+    thType: "类型",
+    thPattern: "匹配内容",
+    thRemark: "备注",
+    thEnabled: "启用",
+    builtinBadge: "内置",
+    sheetTitleEdit: "编辑资产拦截规则",
+    sheetTitleNew: "新建资产拦截规则",
+    sheetDesc: "命中此规则的目标资产会被全局拦截",
+    fieldMatchKind: "匹配类型",
+    fieldPattern: "匹配内容",
+    helpCidr: "CIDR 网段，形如 192.168.0.0/16",
+    helpFuzzy: "模糊匹配：目标包含此内容即命中",
+    helpExact: "全等匹配：目标需与此内容完全一致",
+    fieldRemark: "备注（可选）",
+    fieldRemarkPlaceholder: "说明这条规则的用途",
+    enableRuleLabel: "启用此规则",
+    cancel: "取消",
+    save: "保存",
+    saving: "保存中…",
+    errPatternRequired: "匹配内容不能为空",
+    errCidrInvalid: "CIDR 格式无效，形如 192.168.0.0/16",
+    toastLoadFailed: "加载资产拦截规则失败",
+    toastUpdated: "规则已更新",
+    toastCreated: "规则已创建",
+    confirmDelete: (p: string) => `确定删除资产拦截规则「${p}」？`,
+    toastDeleted: "规则已删除",
+  },
+};
+
+function KindBadge({ kind, locale }: { kind: AssetInterceptKind; locale: "en" | "pt" | "zh" }) {
   const fuzzy = kind.startsWith("fuzzy_");
   const cidr = kind === "cidr";
+  let colorClass = "border-emerald-400 text-emerald-600";
+  if (cidr) {
+    colorClass = "border-sky-400 text-sky-600";
+  } else if (fuzzy) {
+    colorClass = "border-amber-400 text-amber-600";
+  }
   return (
-    <Badge
-      variant="outline"
-      className={
-        cidr
-          ? "border-sky-400 text-sky-600"
-          : fuzzy
-            ? "border-amber-400 text-amber-600"
-            : "border-emerald-400 text-emerald-600"
-      }
-    >
-      {KIND_LABEL[kind]}
+    <Badge variant="outline" className={colorClass}>
+      {kindMeta(kind, locale).label}
     </Badge>
   );
 }
@@ -66,8 +225,6 @@ function Field({ label, hint, children }: { label: string; hint?: string; childr
   );
 }
 
-// ---- form state ----
-
 type RuleForm = {
   enabled: boolean;
   kind: AssetInterceptKind;
@@ -77,19 +234,21 @@ type RuleForm = {
 
 const defaultForm = (): RuleForm => ({ enabled: true, kind: "fuzzy_domain", pattern: "", note: "" });
 
-// 前端轻校验（与后端一致：仅 exact_ip / cidr 做格式校验，其余交后端）。
-function frontValidate(form: RuleForm): string | null {
+function frontValidate(form: RuleForm, t: typeof I18N.en): string | null {
   const p = form.pattern.trim();
-  if (!p) return "匹配内容不能为空";
+  if (!p) return t.errPatternRequired;
   if (form.kind === "cidr" && !/^[0-9a-fA-F:.]+\/\d{1,3}$/.test(p)) {
-    return "CIDR 格式无效，形如 192.168.0.0/16";
+    return t.errCidrInvalid;
   }
   return null;
 }
 
-// ---- page ----
-
 export default function AssetInterceptPage() {
+  const { locale } = useI18n();
+  const t = I18N[locale] ?? I18N.en;
+  const kindOptions = getKindOptions(locale);
+  const kindGroups = Array.from(new Set(kindOptions.map((o) => o.group)));
+
   const [rules, setRules] = React.useState<AssetInterceptRule[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [open, setOpen] = React.useState(false);
@@ -101,14 +260,14 @@ export default function AssetInterceptPage() {
     try {
       setRules(await api.assetInterceptRules());
     } catch {
-      toast.error("加载资产拦截规则失败");
+      toast.error(t.toastLoadFailed);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t.toastLoadFailed]);
 
   React.useEffect(() => {
-    load();
+    void load();
   }, [load]);
 
   function set(patch: Partial<RuleForm>) {
@@ -123,28 +282,38 @@ export default function AssetInterceptPage() {
 
   function openEdit(rule: AssetInterceptRule) {
     setEditing(rule);
-    setForm({ enabled: rule.enabled, kind: rule.kind, pattern: rule.pattern, note: rule.note });
+    setForm({
+      enabled: rule.enabled,
+      kind: rule.kind,
+      pattern: rule.pattern,
+      note: rule.note ?? "",
+    });
     setOpen(true);
   }
 
   async function handleSave() {
-    const err = frontValidate(form);
+    const err = frontValidate(form, t);
     if (err) {
       toast.error(err);
       return;
     }
-    const payload = { ...form, pattern: form.pattern.trim() };
     setSaving(true);
     try {
+      const payload = {
+        kind: form.kind,
+        pattern: form.pattern.trim(),
+        note: form.note.trim(),
+        enabled: form.enabled,
+      };
       if (editing) {
         await api.updateAssetInterceptRule(editing.id, payload);
-        toast.success("规则已更新");
+        toast.success(t.toastUpdated);
       } else {
         await api.createAssetInterceptRule(payload);
-        toast.success("规则已创建");
+        toast.success(t.toastCreated);
       }
       setOpen(false);
-      load();
+      await load();
     } catch (e) {
       toast.error((e as Error).message);
     } finally {
@@ -153,11 +322,11 @@ export default function AssetInterceptPage() {
   }
 
   async function handleDelete(rule: AssetInterceptRule) {
-    if (!window.confirm(`确定删除资产拦截规则「${rule.pattern}」？`)) return;
+    if (!window.confirm(t.confirmDelete(rule.pattern))) return;
     try {
       await api.deleteAssetInterceptRule(rule.id);
-      toast.success("规则已删除");
-      load();
+      toast.success(t.toastDeleted);
+      await load();
     } catch (e) {
       toast.error((e as Error).message);
     }
@@ -166,95 +335,99 @@ export default function AssetInterceptPage() {
   async function handleToggle(rule: AssetInterceptRule) {
     try {
       await api.toggleAssetInterceptRule(rule.id, !rule.enabled);
-      load();
+      await load();
     } catch (e) {
       toast.error((e as Error).message);
     }
   }
 
-  const placeholder = KIND_OPTIONS.find((o) => o.value === form.kind)?.placeholder ?? "";
+  const placeholder = kindOptions.find((o) => o.value === form.kind)?.placeholder ?? "";
+
+  let patternHint = t.helpExact;
+  if (form.kind === "cidr") {
+    patternHint = t.helpCidr;
+  } else if (form.kind.startsWith("fuzzy_")) {
+    patternHint = t.helpFuzzy;
+  }
 
   return (
     <div className="flex flex-1 flex-col gap-5 p-6">
-      {/* header */}
       <div className="flex items-center gap-2.5">
         <BanIcon className="h-5 w-5 shrink-0" />
         <div>
-          <h1 className="text-lg font-semibold leading-tight">资产拦截</h1>
-          <p className="text-sm text-muted-foreground mt-0.5">
-            全局资产黑名单：命中的域名 / IP / URL / 网段将被拦截，不对其执行任何操作
-          </p>
+          <h1 className="text-lg font-semibold leading-tight">{t.pageTitle}</h1>
+          <p className="text-sm text-muted-foreground mt-0.5">{t.pageSubtitle}</p>
         </div>
       </div>
 
       <div className="flex items-center justify-between gap-3">
-        <p className="text-xs text-muted-foreground">
-          支持全等与模糊匹配的域名 / IP / URL，以及 CIDR 网段；默认内置模糊拦截政府（.gov / .gov.cn）与教育（.edu /
-          .edu.cn）网站
-        </p>
+        <p className="text-xs text-muted-foreground">{t.infoTip}</p>
         <Button onClick={openNew} size="sm" className="shrink-0">
           <PlusIcon className="h-4 w-4" />
-          新建规则
+          {t.newRuleBtn}
         </Button>
       </div>
 
       <Card>
         <CardContent className="p-0">
-          {loading ? (
-            <p className="p-6 text-sm text-muted-foreground">加载中…</p>
-          ) : rules.length === 0 ? (
+          {loading && <p className="p-6 text-sm text-muted-foreground">{t.loading}</p>}
+          {!loading && rules.length === 0 && (
             <div className="flex flex-col items-center justify-center gap-2 py-16 text-center">
               <BanIcon className="h-8 w-8 text-muted-foreground/40" />
-              <p className="text-sm text-muted-foreground">暂无资产拦截规则</p>
+              <p className="text-sm text-muted-foreground">{t.empty}</p>
               <Button size="sm" variant="outline" onClick={openNew}>
                 <PlusIcon className="h-4 w-4" />
-                新建第一条规则
+                {t.emptyAction}
               </Button>
             </div>
-          ) : (
+          )}
+          {!loading && rules.length > 0 && (
             <Table>
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
-                  <TableHead className="w-[130px]">类型</TableHead>
-                  <TableHead>匹配内容</TableHead>
-                  <TableHead>备注</TableHead>
-                  <TableHead className="w-[64px] text-center">启用</TableHead>
+                  <TableHead className="w-[130px]">{t.thType}</TableHead>
+                  <TableHead>{t.thPattern}</TableHead>
+                  <TableHead>{t.thRemark}</TableHead>
+                  <TableHead className="w-[64px] text-center">{t.thEnabled}</TableHead>
                   <TableHead className="w-[80px]" />
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {rules.map((rule) => (
-                  <TableRow key={rule.id} className={!rule.enabled ? "opacity-40" : ""}>
+                  <TableRow key={rule.id}>
                     <TableCell>
-                      <KindBadge kind={rule.kind} />
+                      <KindBadge kind={rule.kind} locale={locale} />
                     </TableCell>
-                    <TableCell className="max-w-[280px]">
-                      <code className="block truncate rounded bg-muted px-1.5 py-0.5 text-xs font-mono">
-                        {rule.pattern}
-                      </code>
-                    </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
+                    <TableCell className="font-mono text-xs">
                       <div className="flex items-center gap-1.5">
+                        <span className="break-all">{rule.pattern}</span>
                         {rule.builtin && (
-                          <Badge variant="secondary" className="shrink-0 px-1 py-0 text-[10px]">
-                            内置
+                          <Badge variant="outline" className="text-[10px]">
+                            {t.builtinBadge}
                           </Badge>
                         )}
-                        <span className="truncate">{rule.note}</span>
                       </div>
                     </TableCell>
-                    <TableCell className="text-center">
-                      <Switch checked={rule.enabled} onCheckedChange={() => handleToggle(rule)} />
+                    <TableCell className="text-xs text-muted-foreground max-w-xs truncate">
+                      {rule.note || "—"}
                     </TableCell>
-                    <TableCell>
-                      <div className="flex items-center justify-end gap-0.5">
-                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEdit(rule)}>
+                    <TableCell className="text-center">
+                      <Switch
+                        checked={rule.enabled}
+                        onCheckedChange={() => handleToggle(rule)}
+                        aria-label={`Toggle ${rule.pattern}`}
+                      />
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(rule)}>
                           <PencilIcon className="h-3.5 w-3.5" />
                         </Button>
                         <Button
-                          size="icon"
                           variant="ghost"
+                          size="icon"
                           className="h-7 w-7 text-destructive hover:text-destructive"
+                          disabled={rule.builtin}
                           onClick={() => handleDelete(rule)}
                         >
                           <Trash2Icon className="h-3.5 w-3.5" />
@@ -269,80 +442,72 @@ export default function AssetInterceptPage() {
         </CardContent>
       </Card>
 
-      {/* editor sheet */}
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent side="right" className="flex flex-col gap-0 p-0 sm:max-w-md">
           <SheetHeader className="border-b px-6 py-4">
-            <SheetTitle>{editing ? "编辑资产拦截规则" : "新建资产拦截规则"}</SheetTitle>
-            <SheetDescription className="text-xs">命中此规则的目标资产会被全局拦截</SheetDescription>
+            <SheetTitle>{editing ? t.sheetTitleEdit : t.sheetTitleNew}</SheetTitle>
+            <SheetDescription className="text-xs">{t.sheetDesc}</SheetDescription>
           </SheetHeader>
 
           <div className="flex-1 min-h-0 overflow-y-auto px-6 py-5 space-y-5">
-            <Field label="匹配类型">
+            <Field label={t.fieldMatchKind}>
               <Select value={form.kind} onValueChange={(v) => set({ kind: v as AssetInterceptKind })}>
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {KIND_GROUPS.map((g) => (
-                    <React.Fragment key={g}>
-                      <div className="px-2 py-1 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                        {g}
+                  {kindGroups.map((grp) => (
+                    <React.Fragment key={grp}>
+                      <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+                        {grp}
                       </div>
-                      {KIND_OPTIONS.filter((o) => o.group === g).map((o) => (
-                        <SelectItem key={o.value} value={o.value}>
-                          {o.label}
-                        </SelectItem>
-                      ))}
+                      {kindOptions
+                        .filter((o) => o.group === grp)
+                        .map((o) => (
+                          <SelectItem key={o.value} value={o.value}>
+                            {o.label}
+                          </SelectItem>
+                        ))}
+                      <Separator className="my-1" />
                     </React.Fragment>
                   ))}
                 </SelectContent>
               </Select>
             </Field>
 
-            <Field
-              label="匹配内容"
-              hint={
-                form.kind === "cidr"
-                  ? "CIDR 网段，形如 192.168.0.0/16"
-                  : form.kind.startsWith("fuzzy_")
-                    ? "模糊匹配：目标包含此内容即命中"
-                    : "全等匹配：目标需与此内容完全一致"
-              }
-            >
+            <Field label={t.fieldPattern} hint={patternHint}>
               <Input
                 placeholder={placeholder}
                 value={form.pattern}
                 onChange={(e) => set({ pattern: e.target.value })}
+                className="font-mono text-xs"
               />
             </Field>
 
-            <Field label="备注（可选）">
+            <Field label={t.fieldRemark}>
               <Textarea
-                placeholder="说明这条规则的用途"
+                placeholder={t.fieldRemarkPlaceholder}
                 value={form.note}
                 onChange={(e) => set({ note: e.target.value })}
                 rows={2}
-                className="resize-none"
+                className="text-xs resize-none"
               />
             </Field>
-
-            <Separator />
 
             <div className="flex items-center gap-3">
               <Switch id="asset-rule-enabled" checked={form.enabled} onCheckedChange={(v) => set({ enabled: v })} />
               <Label htmlFor="asset-rule-enabled" className="cursor-pointer">
-                启用此规则
+                {t.enableRuleLabel}
               </Label>
             </div>
           </div>
 
           <SheetFooter className="border-t px-6 py-4 flex-row justify-end gap-2">
-            <Button variant="outline" onClick={() => setOpen(false)}>
-              取消
+            <Button type="button" variant="outline" onClick={() => setOpen(false)} disabled={saving}>
+              {t.cancel}
             </Button>
             <Button onClick={handleSave} disabled={saving}>
-              {saving ? "保存中…" : "保存"}
+              {saving ? t.saving : t.save}
             </Button>
           </SheetFooter>
         </SheetContent>

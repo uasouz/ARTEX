@@ -1,5 +1,7 @@
 "use client";
 
+import * as React from "react";
+
 import Link from "next/link";
 
 import { useShallow } from "zustand/react/shallow";
@@ -15,16 +17,18 @@ import {
 } from "@/components/ui/sidebar";
 import { APP_CONFIG } from "@/config/app-config";
 import { useCurrentUser } from "@/hooks/use-current-user";
-import { sidebarItems } from "@/navigation/sidebar/sidebar-items";
+import { useI18n } from "@/lib/i18n/i18n-context";
+import { getSidebarItems } from "@/navigation/sidebar/sidebar-items";
 import { usePreferencesStore } from "@/stores/preferences/preferences-provider";
 
 import { NavMain } from "./nav-main";
 import { NavUser } from "./nav-user";
-import { SidebarSupportCard } from "./sidebar-support-card";
-
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const currentUser = useCurrentUser();
+  const { d } = useI18n();
+  const items = React.useMemo(() => getSidebarItems(d), [d]);
+
   const { sidebarVariant, sidebarCollapsible, isSynced } = usePreferencesStore(
     useShallow((s) => ({
       sidebarVariant: s.sidebarVariant,
@@ -44,17 +48,15 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
             <SidebarMenuButton asChild>
               <Link prefetch={false} href="/function/tasks">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src="/logo.png" alt="ARTEX" width={40} height={40} className="shrink-0" />
-                <span className="font-semibold text-base">{APP_CONFIG.name}</span>
+                <img src="/logo.png" alt="CIRDAN ARTEX" width={40} height={40} className="shrink-0" />
+                <span className="font-semibold text-base">{d.brand.name}</span>
               </Link>
             </SidebarMenuButton>
           </SidebarMenuItem>
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={sidebarItems} />
-        {/* <NavDocuments items={data.documents} /> */}
-        {/* <NavSecondary items={data.navSecondary} className="mt-auto" /> */}
+        <NavMain items={items} />
       </SidebarContent>
       <SidebarFooter>
         <NavUser user={currentUser} />

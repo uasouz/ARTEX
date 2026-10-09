@@ -5,7 +5,20 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 import { sseUrl } from "@/lib/api";
+import { useI18n } from "@/lib/i18n/i18n-context";
 import { isBtwCommand, type SideExchange, type SideHistory, sideAPI } from "@/lib/side-questions";
+
+const I18N = {
+  en: {
+    parseFailed: "Failed to parse side question data, please reopen the panel",
+  },
+  pt: {
+    parseFailed: "Falha ao analisar os dados da pergunta paralela, reabra o painel",
+  },
+  zh: {
+    parseFailed: "旁路数据解析失败，请重新打开面板",
+  },
+};
 
 // crypto.randomUUID 仅在安全上下文可用(https/localhost);经 IP+http 访问时降级。
 function newSideRequestID(): string {
@@ -23,6 +36,9 @@ function merge(old: SideExchange[], incoming: SideExchange[]) {
 }
 
 export function useSideQuestions(parent: string | null) {
+  const { locale } = useI18n();
+  const t = I18N[locale] ?? I18N.en;
+
   const [stateParent, setStateParent] = useState(parent);
   const current = stateParent === parent;
   const [open, setOpen] = useState(false);
@@ -138,7 +154,7 @@ export function useSideQuestions(parent: string | null) {
         restoreFailedDraft([item]);
         if (item.status !== "running") stream.close();
       } catch {
-        setError("旁路数据解析失败，请重新打开面板");
+        setError(t.parseFailed);
       }
     });
     stream.addEventListener("cleared", () => {
@@ -146,7 +162,7 @@ export function useSideQuestions(parent: string | null) {
       if (version === epoch.current) setItems([]);
     });
     return () => stream.close();
-  }, [runningID, streamEpoch, restoreFailedDraft]);
+  }, [runningID, streamEpoch, restoreFailedDraft, t]);
 
   const ask = async (input: string) => {
     const question = input.trim();

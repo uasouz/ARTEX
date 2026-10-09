@@ -7,6 +7,7 @@ import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Pagination, PaginationContent, PaginationEllipsis, PaginationItem } from "@/components/ui/pagination";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useI18n } from "@/lib/i18n/i18n-context";
 
 interface TablePaginationProps {
   page: number; // 1-based
@@ -17,7 +18,30 @@ interface TablePaginationProps {
   pageSizeOptions?: number[];
 }
 
-// pageWindows returns the sequence of page numbers / ellipsis to render.
+const I18N = {
+  en: {
+    perPage: "/ page",
+    rangeOf: "{from}–{to} of {total}",
+    zeroTotal: "0 total",
+    prevPage: "Previous page",
+    nextPage: "Next page",
+  },
+  pt: {
+    perPage: "/ pág.",
+    rangeOf: "{from}–{to} de {total}",
+    zeroTotal: "Total de 0",
+    prevPage: "Página anterior",
+    nextPage: "Próxima página",
+  },
+  zh: {
+    perPage: "条/页",
+    rangeOf: "{from}–{to} / 共 {total} 条",
+    zeroTotal: "共 0 条",
+    prevPage: "上一页",
+    nextPage: "下一页",
+  },
+};
+
 function pageWindows(page: number, total: number): (number | "...")[] {
   if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
   const out: (number | "...")[] = [1];
@@ -38,6 +62,9 @@ export function TablePagination({
   onPageSizeChange,
   pageSizeOptions = [10, 20, 50],
 }: TablePaginationProps) {
+  const { locale } = useI18n();
+  const t = I18N[locale] ?? I18N.en;
+
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const safePage = Math.min(Math.max(1, page), totalPages);
   const from = total === 0 ? 0 : (safePage - 1) * pageSize + 1;
@@ -64,13 +91,13 @@ export function TablePagination({
             ))}
           </SelectContent>
         </Select>
-        <span>条/页</span>
+        <span>{t.perPage}</span>
         {total > 0 ? (
           <span className="tabular-nums">
-            {from}–{to} / 共 {total} 条
+            {t.rangeOf.replace("{from}", String(from)).replace("{to}", String(to)).replace("{total}", String(total))}
           </span>
         ) : (
-          <span>共 0 条</span>
+          <span>{t.zeroTotal}</span>
         )}
       </div>
 
@@ -83,13 +110,14 @@ export function TablePagination({
                 size="icon-sm"
                 disabled={safePage === 1}
                 onClick={() => onPageChange(safePage - 1)}
-                aria-label="上一页"
+                aria-label={t.prevPage}
               >
                 <ChevronLeftIcon className="size-4" />
               </Button>
             </PaginationItem>
             {pageWindows(safePage, totalPages).map((p, i) =>
               p === "..." ? (
+                // biome-ignore lint/suspicious/noArrayIndexKey: ellipsis position key
                 <PaginationItem key={`el-${i}`}>
                   <PaginationEllipsis />
                 </PaginationItem>
@@ -112,7 +140,7 @@ export function TablePagination({
                 size="icon-sm"
                 disabled={safePage === totalPages}
                 onClick={() => onPageChange(safePage + 1)}
-                aria-label="下一页"
+                aria-label={t.nextPage}
               >
                 <ChevronRightIcon className="size-4" />
               </Button>
