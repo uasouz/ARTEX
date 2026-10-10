@@ -493,6 +493,7 @@ export interface Finding {
   evidence_version?: number;
   report_evidence_version?: number;
   report_stale?: boolean;
+  duplicate_count?: number; // 其他开放状态的同 dedup_key 发现数
   id: string;
   finding_id?: string; // 独立 findings 表的行 id,状态更新的句柄(任务内旧节点可能缺失)
   vulnclass: string;
@@ -502,6 +503,11 @@ export interface Finding {
   summary: string;
   evidence: string;
   report?: string; // 详细报告(Markdown);仅详情接口返回,列表为空
+  cvss_vector?: string; // CVSS 3.x 基础向量;空=未评分
+  cvss_score?: number; // 0-10;0=未评分
+  cwe?: string; // 如 CWE-79
+  remediation?: string; // 结构化修复建议(Markdown);仅详情接口返回
+  remediation_effort?: "" | "S" | "M" | "L";
   intent_id?: string;
   param_id?: string;
   task_id?: string;

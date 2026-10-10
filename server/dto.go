@@ -308,16 +308,23 @@ type FindingDTO struct {
 	ReportEvidenceVersion int64                      `json:"report_evidence_version"`
 	ReportStale           bool                       `json:"report_stale"`
 	TrafficBindings       []db.FindingTrafficBinding `json:"traffic_bindings,omitempty"`
+	DuplicateCount        int                        `json:"duplicate_count,omitempty"`
 
-	ID        string `json:"id"`
-	FindingID string `json:"finding_id,omitempty"` // standalone findings-table id — the handle for status updates
-	VulnClass string `json:"vulnclass"`
-	Name      string `json:"name,omitempty"` // 漏洞名称;为空时前端回退展示 vulnclass
-	Severity  string `json:"severity"`       // critical | high | medium | low
-	Status    string `json:"status"`         // pending | in_progress | confirmed | resolved | fixed | false_positive | ignored | duplicate | risk_accepted
-	Summary   string `json:"summary"`
-	Evidence  string `json:"evidence"`
-	Report    string `json:"report,omitempty"` // 详细报告(Markdown);仅详情接口返回,列表为空
+	ID        string  `json:"id"`
+	FindingID string  `json:"finding_id,omitempty"` // standalone findings-table id — the handle for status updates
+	VulnClass string  `json:"vulnclass"`
+	Name      string  `json:"name,omitempty"` // 漏洞名称;为空时前端回退展示 vulnclass
+	Severity  string  `json:"severity"`       // critical | high | medium | low
+	Status    string  `json:"status"`         // pending | in_progress | confirmed | resolved | fixed | false_positive | ignored | duplicate | risk_accepted
+	Summary   string  `json:"summary"`
+	Evidence  string  `json:"evidence"`
+	Report    string  `json:"report,omitempty"` // 详细报告(Markdown);仅详情接口返回,列表为空
+
+	CvssVector       string  `json:"cvss_vector,omitempty"`       // CVSS 3.x 基础向量;空=未评分
+	CvssScore        float64 `json:"cvss_score,omitempty"`        // 0-10;0=未评分
+	Cwe              string  `json:"cwe,omitempty"`               // 如 CWE-79
+	Remediation      string  `json:"remediation,omitempty"`       // 结构化修复建议(Markdown);仅详情接口返回
+	RemediationEffort string `json:"remediation_effort,omitempty"` // S | M | L
 
 	IntentID        string            `json:"intent_id,omitempty"`
 	ParamID         string            `json:"param_id,omitempty"`
@@ -448,14 +455,20 @@ func findingFromDB(f *db.DBFinding, assets map[int64]*db.Asset) FindingDTO {
 		FindingID:    i64s(f.ID),
 		TrafficCount: f.TrafficCount, EvidenceVersion: f.EvidenceVersion, ReportEvidenceVersion: f.ReportEvidenceVersion,
 		ReportStale: f.Report != "" && f.EvidenceVersion != f.ReportEvidenceVersion, TrafficBindings: f.TrafficBindings,
-		VulnClass: f.VulnClass,
-		Name:      f.Name,
-		Severity:  f.Severity,
-		Status:    status,
-		Summary:   f.Summary,
-		Evidence:  f.Evidence,
-		Report:    f.Report,
-		TS:        rfc3339(f.CreatedAt),
+		DuplicateCount:    f.DuplicateCount,
+		VulnClass:         f.VulnClass,
+		Name:              f.Name,
+		Severity:          f.Severity,
+		Status:            status,
+		Summary:           f.Summary,
+		Evidence:          f.Evidence,
+		Report:            f.Report,
+		CvssVector:        f.CvssVector,
+		CvssScore:         f.CvssScore,
+		Cwe:               f.Cwe,
+		Remediation:       f.Remediation,
+		RemediationEffort: f.RemediationEffort,
+		TS:                rfc3339(f.CreatedAt),
 	}
 	d.Assets = findingAssetDTOs(f.AssetIDs, assets)
 	if f.TaskID != nil {

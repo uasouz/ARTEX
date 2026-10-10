@@ -559,7 +559,7 @@ export const api = {
   // exportFindings 触发发现页导出并下载文件。scope=selected 时传 ids(finding_id 列表);
   // scope=filtered 时传当前筛选(沿用 FindingQuery 的筛选字段);scope=all 忽略筛选。
   exportFindings: async (opts: {
-    format: "md-single" | "md-zip" | "csv" | "json";
+    format: "md-single" | "md-zip" | "csv" | "json" | "pdf";
     scope: "filtered" | "all" | "selected";
     filters?: Omit<FindingQuery, "page" | "pageSize">;
     ids?: string[];
@@ -669,6 +669,12 @@ export const api = {
     id: string,
     fields: { name?: string; vulnclass?: string; severity?: Severity; status?: FindingStatus },
   ) => patch<Finding>(`/exploration/findings/${id}`, fields),
+  // CVSS / CWE / 结构化修复建议:一次 PATCH 一个维度,服务端派生分数与严重度。
+  setFindingCVSS: (id: string, cvssVector: string) =>
+    patch<Finding>(`/exploration/findings/${id}`, { cvss_vector: cvssVector }),
+  setFindingCWE: (id: string, cwe: string) => patch<Finding>(`/exploration/findings/${id}`, { cwe }),
+  setFindingRemediation: (id: string, remediation: string, remediationEffort: string) =>
+    patch<Finding>(`/exploration/findings/${id}`, { remediation, remediation_effort: remediationEffort }),
   // 删除漏洞:移除 findings 记录 + 来源探索节点(从发现列表/任务发现 Tab/探索图一并消失)。
   deleteFinding: (id: string) => del<{ deleted: boolean; id: number }>(`/exploration/findings/${id}`),
   findingRetests: (id: string) =>

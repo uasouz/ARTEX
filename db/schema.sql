@@ -1102,6 +1102,16 @@ CREATE TABLE IF NOT EXISTS findings (
 ALTER TABLE findings ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'pending';
 ALTER TABLE findings ADD COLUMN IF NOT EXISTS name   TEXT NOT NULL DEFAULT '';
 ALTER TABLE findings ADD COLUMN IF NOT EXISTS report TEXT NOT NULL DEFAULT '';
+-- 计费与交付增强（CIRDAN Phase 1）：
+-- cvss_vector / cvss_score：CVSS 3.x 基础向量与得分；severity 在设置向量时按得分自动推导。
+-- cwe：弱点编号（如 CWE-79）。remediation / remediation_effort：结构化修复建议与工作量档（S/M/L）。
+-- dedup_key：跨任务去重键（类别+归一化名称+资产集合的哈希），重复发现据此识别。
+ALTER TABLE findings ADD COLUMN IF NOT EXISTS cvss_vector      TEXT NOT NULL DEFAULT '';
+ALTER TABLE findings ADD COLUMN IF NOT EXISTS cvss_score       REAL NOT NULL DEFAULT 0;
+ALTER TABLE findings ADD COLUMN IF NOT EXISTS cwe              TEXT NOT NULL DEFAULT '';
+ALTER TABLE findings ADD COLUMN IF NOT EXISTS remediation      TEXT NOT NULL DEFAULT '';
+ALTER TABLE findings ADD COLUMN IF NOT EXISTS remediation_effort TEXT NOT NULL DEFAULT '';
+ALTER TABLE findings ADD COLUMN IF NOT EXISTS dedup_key        TEXT NOT NULL DEFAULT '';
 CREATE INDEX IF NOT EXISTS idx_findings_task ON findings(task_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_findings_time ON findings(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_findings_status ON findings(status, created_at DESC);

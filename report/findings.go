@@ -46,6 +46,92 @@ func findingTitle(f *db.DBFinding, locale string) string {
 	return nz(f.Name, nz(f.VulnClass, fallback))
 }
 
+// findingScoreLines renders the CVSS / CWE metadata lines (empty when unscored).
+func findingScoreLines(f *db.DBFinding, loc string) string {
+	if f.CvssVector == "" && f.Cwe == "" {
+		return ""
+	}
+	var b strings.Builder
+	switch loc {
+	case "pt":
+		if f.CvssVector != "" {
+			fmt.Fprintf(&b, "- **CVSS v3**: %.1f — `%s`\n", f.CvssScore, f.CvssVector)
+		}
+		if f.Cwe != "" {
+			fmt.Fprintf(&b, "- **CWE**: %s\n", f.Cwe)
+		}
+	case "zh":
+		if f.CvssVector != "" {
+			fmt.Fprintf(&b, "- **CVSS v3**：%.1f — `%s`\n", f.CvssScore, f.CvssVector)
+		}
+		if f.Cwe != "" {
+			fmt.Fprintf(&b, "- **CWE**：%s\n", f.Cwe)
+		}
+	default:
+		if f.CvssVector != "" {
+			fmt.Fprintf(&b, "- **CVSS v3**: %.1f — `%s`\n", f.CvssScore, f.CvssVector)
+		}
+		if f.Cwe != "" {
+			fmt.Fprintf(&b, "- **CWE**: %s\n", f.Cwe)
+		}
+	}
+	return b.String()
+}
+
+// remediationEffortLabel maps the S/M/L band to a localized phrase.
+func remediationEffortLabel(effort, loc string) string {
+	switch effort {
+	case "S":
+		if loc == "pt" {
+			return "Esforço estimado: pequeno"
+		}
+		if loc == "zh" {
+			return "预估工作量：小"
+		}
+		return "Estimated effort: small"
+	case "M":
+		if loc == "pt" {
+			return "Esforço estimado: médio"
+		}
+		if loc == "zh" {
+			return "预估工作量：中"
+		}
+		return "Estimated effort: medium"
+	case "L":
+		if loc == "pt" {
+			return "Esforço estimado: grande"
+		}
+		if loc == "zh" {
+			return "预估工作量：大"
+		}
+		return "Estimated effort: large"
+	}
+	return ""
+}
+
+// remediationMarkdown renders the structured fix-guidance block (empty when none).
+func remediationMarkdown(f *db.DBFinding, loc string) string {
+	r := strings.TrimSpace(f.Remediation)
+	if r == "" {
+		return ""
+	}
+	var b strings.Builder
+	switch loc {
+	case "pt":
+		b.WriteString("## Recomendações de Correção\n\n")
+	case "zh":
+		b.WriteString("## 修复建议\n\n")
+	default:
+		b.WriteString("## Remediation Guidance\n\n")
+	}
+	if label := remediationEffortLabel(f.RemediationEffort, loc); label != "" {
+		fmt.Fprintf(&b, "_%s_\n\n", label)
+	}
+	b.WriteString(r)
+	b.WriteString("\n\n")
+	return b.String()
+}
+
 // FindingsMarkdown renders a consolidated vulnerability report.
 func FindingsMarkdown(fs []*db.DBFinding, generatedAt time.Time, locales ...string) string {
 	loc := getLocale(locales)
@@ -86,6 +172,7 @@ func FindingsMarkdown(fs []*db.DBFinding, generatedAt time.Time, locales ...stri
 				fmt.Fprintf(&b, "- **Categoria**: %s\n", f.VulnClass)
 			}
 			fmt.Fprintf(&b, "- **Status**: %s\n", nz(f.Status, "pendente"))
+			b.WriteString(findingScoreLines(f, loc))
 			if desc := strings.TrimSpace(f.TaskDescription); desc != "" {
 				fmt.Fprintf(&b, "- **Tarefa**: %s\n", desc)
 			}
@@ -101,6 +188,7 @@ func FindingsMarkdown(fs []*db.DBFinding, generatedAt time.Time, locales ...stri
 				b.WriteString(rep)
 				b.WriteString("\n\n")
 			}
+			b.WriteString(remediationMarkdown(f, loc))
 			b.WriteString(findingTrafficMarkdown(f, false, loc))
 			b.WriteString("---\n\n")
 		}
@@ -131,6 +219,7 @@ func FindingsMarkdown(fs []*db.DBFinding, generatedAt time.Time, locales ...stri
 				fmt.Fprintf(&b, "- **类别**：%s\n", f.VulnClass)
 			}
 			fmt.Fprintf(&b, "- **状态**：%s\n", nz(f.Status, "pending"))
+			b.WriteString(findingScoreLines(f, loc))
 			if desc := strings.TrimSpace(f.TaskDescription); desc != "" {
 				fmt.Fprintf(&b, "- **所属任务**：%s\n", desc)
 			}
@@ -146,6 +235,7 @@ func FindingsMarkdown(fs []*db.DBFinding, generatedAt time.Time, locales ...stri
 				b.WriteString(rep)
 				b.WriteString("\n\n")
 			}
+			b.WriteString(remediationMarkdown(f, loc))
 			b.WriteString(findingTrafficMarkdown(f, false, loc))
 			b.WriteString("---\n\n")
 		}
@@ -176,6 +266,7 @@ func FindingsMarkdown(fs []*db.DBFinding, generatedAt time.Time, locales ...stri
 				fmt.Fprintf(&b, "- **Category**: %s\n", f.VulnClass)
 			}
 			fmt.Fprintf(&b, "- **Status**: %s\n", nz(f.Status, "pending"))
+			b.WriteString(findingScoreLines(f, loc))
 			if desc := strings.TrimSpace(f.TaskDescription); desc != "" {
 				fmt.Fprintf(&b, "- **Assessment Task**: %s\n", desc)
 			}
@@ -191,6 +282,7 @@ func FindingsMarkdown(fs []*db.DBFinding, generatedAt time.Time, locales ...stri
 				b.WriteString(rep)
 				b.WriteString("\n\n")
 			}
+			b.WriteString(remediationMarkdown(f, loc))
 			b.WriteString(findingTrafficMarkdown(f, false, loc))
 			b.WriteString("---\n\n")
 		}
@@ -212,6 +304,7 @@ func SingleFindingMarkdown(f *db.DBFinding, generatedAt time.Time, locales ...st
 		}
 		fmt.Fprintf(&b, "- **Gravidade**: %s\n", nz(f.Severity, "info"))
 		fmt.Fprintf(&b, "- **Status**: %s\n", nz(f.Status, "pendente"))
+		b.WriteString(findingScoreLines(f, loc))
 		if desc := strings.TrimSpace(f.TaskDescription); desc != "" {
 			fmt.Fprintf(&b, "- **Tarefa**: %s\n", desc)
 		}
@@ -228,6 +321,7 @@ func SingleFindingMarkdown(f *db.DBFinding, generatedAt time.Time, locales ...st
 			b.WriteString(rep)
 			b.WriteString("\n")
 		}
+		b.WriteString(remediationMarkdown(f, loc))
 		b.WriteString(findingTrafficMarkdown(f, true, loc))
 
 	case "zh":
@@ -237,6 +331,7 @@ func SingleFindingMarkdown(f *db.DBFinding, generatedAt time.Time, locales ...st
 		}
 		fmt.Fprintf(&b, "- **严重等级**：%s\n", nz(f.Severity, "info"))
 		fmt.Fprintf(&b, "- **状态**：%s\n", nz(f.Status, "pending"))
+		b.WriteString(findingScoreLines(f, loc))
 		if desc := strings.TrimSpace(f.TaskDescription); desc != "" {
 			fmt.Fprintf(&b, "- **所属任务**：%s\n", desc)
 		}
@@ -253,6 +348,7 @@ func SingleFindingMarkdown(f *db.DBFinding, generatedAt time.Time, locales ...st
 			b.WriteString(rep)
 			b.WriteString("\n")
 		}
+		b.WriteString(remediationMarkdown(f, loc))
 		b.WriteString(findingTrafficMarkdown(f, true, loc))
 
 	default: // "en"
@@ -262,6 +358,7 @@ func SingleFindingMarkdown(f *db.DBFinding, generatedAt time.Time, locales ...st
 		}
 		fmt.Fprintf(&b, "- **Severity**: %s\n", nz(f.Severity, "info"))
 		fmt.Fprintf(&b, "- **Status**: %s\n", nz(f.Status, "pending"))
+		b.WriteString(findingScoreLines(f, loc))
 		if desc := strings.TrimSpace(f.TaskDescription); desc != "" {
 			fmt.Fprintf(&b, "- **Assessment Task**: %s\n", desc)
 		}
@@ -278,6 +375,7 @@ func SingleFindingMarkdown(f *db.DBFinding, generatedAt time.Time, locales ...st
 			b.WriteString(rep)
 			b.WriteString("\n")
 		}
+		b.WriteString(remediationMarkdown(f, loc))
 		b.WriteString(findingTrafficMarkdown(f, true, loc))
 	}
 
@@ -316,24 +414,33 @@ func FindingsCSV(fs []*db.DBFinding, locales ...string) []byte {
 	var headers []string
 	switch loc {
 	case "pt":
-		headers = []string{"ID", "Título", "Categoria", "Gravidade", "Status", "Tarefa", "Data Descoberta", "Resumo", "Qtd Evidências Tráfego", "IDs Evidências"}
+		headers = []string{"ID", "Título", "Categoria", "Gravidade", "CVSS", "Vetor CVSS", "CWE", "Status", "Esforço Correção", "Tarefa", "Data Descoberta", "Resumo", "Recomendação", "Qtd Evidências Tráfego", "IDs Evidências"}
 	case "zh":
-		headers = []string{"ID", "名称", "类别", "严重等级", "状态", "所属任务", "发现时间", "概述", "流量证据数量", "流量证据ID"}
+		headers = []string{"ID", "名称", "类别", "严重等级", "CVSS", "CVSS 向量", "CWE", "状态", "修复工作量", "所属任务", "发现时间", "概述", "修复建议", "流量证据数量", "流量证据ID"}
 	default:
-		headers = []string{"ID", "Title", "Category", "Severity", "Status", "Task", "Discovered At", "Summary", "Traffic Evidence Count", "Traffic Evidence IDs"}
+		headers = []string{"ID", "Title", "Category", "Severity", "CVSS", "CVSS Vector", "CWE", "Status", "Fix Effort", "Task", "Discovered At", "Summary", "Remediation", "Traffic Evidence Count", "Traffic Evidence IDs"}
 	}
 	_ = w.Write(headers)
 
 	for _, f := range items {
+		score := ""
+		if f.CvssVector != "" {
+			score = fmt.Sprintf("%.1f", f.CvssScore)
+		}
 		_ = w.Write([]string{
 			fmt.Sprintf("%d", f.ID),
 			findingTitle(f, loc),
 			f.VulnClass,
 			nz(f.Severity, "info"),
+			score,
+			f.CvssVector,
+			f.Cwe,
 			nz(f.Status, "pending"),
+			f.RemediationEffort,
 			f.TaskDescription,
 			f.CreatedAt.Format("2006-01-02 15:04:05"),
 			strings.TrimSpace(f.Summary),
+			strings.TrimSpace(f.Remediation),
 			fmt.Sprint(len(f.TrafficBindings)), findingTrafficIDs(f),
 		})
 	}

@@ -209,7 +209,14 @@ export function FindingsTable({
                   />
                 </TableCell>
                 <TableCell>
-                  <StatusBadge domain="severity" value={f.severity} dot />
+                  <div className="flex flex-col items-start gap-1">
+                    <StatusBadge domain="severity" value={f.severity} dot />
+                    {f.cvss_vector ? (
+                      <Badge variant="outline" className="font-mono tabular-nums text-[10px]">
+                        CVSS {(f.cvss_score ?? 0).toFixed(1)}
+                      </Badge>
+                    ) : null}
+                  </div>
                 </TableCell>
                 <TableCell className="max-w-md">
                   <div className="flex min-w-0 flex-col gap-0.5">
@@ -226,13 +233,39 @@ export function FindingsTable({
                       <span className="truncate font-medium">{f.name || f.vulnclass || uncategorizedLabel}</span>
                     )}
                     <span className="truncate text-xs text-muted-foreground">{f.summary}</span>
-                    <Badge variant="outline">
-                      {locale === "pt"
-                        ? `${f.traffic_count ?? 0} evidências de tráfego`
-                        : locale === "zh"
-                          ? `流量证据 ${f.traffic_count ?? 0} 条`
-                          : `${f.traffic_count ?? 0} traffic logs`}
-                    </Badge>
+                    <div className="flex flex-wrap items-center gap-1">
+                      <Badge variant="outline">
+                        {locale === "pt"
+                          ? `${f.traffic_count ?? 0} evidências de tráfego`
+                          : locale === "zh"
+                            ? `流量证据 ${f.traffic_count ?? 0} 条`
+                            : `${f.traffic_count ?? 0} traffic logs`}
+                      </Badge>
+                      {f.cwe ? (
+                        <Badge variant="outline" className="font-mono text-[10px]">
+                          {f.cwe}
+                        </Badge>
+                      ) : null}
+                      {(f.duplicate_count ?? 0) > 0 ? (
+                        <Badge
+                          variant="outline"
+                          className="border-amber-500/50 text-amber-600 text-[10px] dark:text-amber-400"
+                          title={
+                            locale === "pt"
+                              ? `${f.duplicate_count} outro(s) achado(s) aberto(s) com a mesma chave de duplicidade`
+                              : locale === "zh"
+                                ? `另有 ${f.duplicate_count} 个开放状态的同指纹发现`
+                                : `${f.duplicate_count} other open finding(s) share this dedup key`
+                          }
+                        >
+                          {locale === "pt"
+                            ? `duplicado ×${f.duplicate_count}`
+                            : locale === "zh"
+                              ? `重复 ×${f.duplicate_count}`
+                              : `dup ×${f.duplicate_count}`}
+                        </Badge>
+                      ) : null}
+                    </div>
                   </div>
                 </TableCell>
                 <TableCell>

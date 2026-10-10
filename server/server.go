@@ -20,6 +20,7 @@ import (
 	"time"
 
 	"github.com/Autumn-27/artex/agent"
+	"github.com/Autumn-27/artex/cvss"
 	"github.com/Autumn-27/artex/db"
 	"github.com/Autumn-27/artex/intercept"
 	"github.com/Autumn-27/artex/llmpool"
@@ -228,6 +229,15 @@ func New(ctx context.Context, m *Manager, skillDir string, dataDir string, keyDi
 		go s.evidenceStore().RunGC(s.ctx)
 		s.seedPythonInterpreter()     // 自定义脚本工具:开机检测 python 解释器入库(仅空时)
 		go newScheduler(s).Run(s.ctx) // P3 触发器调度(定时/finding/目标事件),仅自定义 agent
+		// One-time backfill: rows created before the dedup_key column existed get
+		// their key computed so duplicate detection covers historical findings too.
+		go func() {
+			if n, err := m.pg.BackfillFindingDedupKeys(); err != nil {
+				log.Printf("[dedup] backfill: %v", err)
+			} else if n > 0 {
+				log.Printf("[dedup] backfilled %d findings", n)
+			}
+		}()
 		// 漏洞 IM 推送投递引擎。与 Scheduler 并列但独立：推送的实时性要求(3s)
 		// 与触发器的业务节奏不同，且两者失败互不牵连——推送卡住不该影响 agent 触发。
 		go newNotifier(s).Run(s.ctx)
@@ -2095,7 +2105,7 @@ func (s *Server) getFinding(w http.ResponseWriter, r *http.Request) {
 //
 //	scope   = filtered（沿用页面筛选）| all（全部）| selected（勾选的 ids）
 //	format  = md-single（整合一份 .md）| md-zip（一漏洞一 .md,打包 zip）
-//	          | csv | json
+//	          | csv | json | pdf（品牌化客户交付 PDF,仅 en/pt）
 //	ids     = 逗号分隔的 finding id（scope=selected 时必填）
 //	筛选参数 severity/status/vulnclass/task_id/q/sort 与列表接口一致（scope=filtered 用）。
 func (s *Server) findingsExport(w http.ResponseWriter, r *http.Request) {
@@ -2182,6 +2192,14 @@ func (s *Server) findingsExport(w http.ResponseWriter, r *http.Request) {
 	case "csv":
 		setDownload("text/csv; charset=utf-8", "findings-"+stamp+".csv")
 		_, _ = w.Write(report.FindingsCSV(fs, loc))
+	case "pdf":
+		pdfBytes, err := report.FindingsPDF(fs, now, loc)
+		if err != nil {
+			writeErr(w, 500, "pdf render failed: "+err.Error())
+			return
+		}
+		setDownload("application/pdf", "cirdan-vulnerability-report-"+stamp+".pdf")
+		_, _ = w.Write(pdfBytes)
 	case "json":
 		assets := s.resolveFindingAssets(fs)
 		out := make([]FindingDTO, 0, len(fs))
@@ -2268,17 +2286,22 @@ func (s *Server) patchFinding(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Status    *string `json:"status"`
-		Severity  *string `json:"severity"`
-		Name      *string `json:"name"`
-		VulnClass *string `json:"vulnclass"`
+		Status            *string  `json:"status"`
+		Severity          *string  `json:"severity"`
+		Name              *string  `json:"name"`
+		VulnClass         *string  `json:"vulnclass"`
+		CvssVector        *string  `json:"cvss_vector"`
+		Cwe               *string  `json:"cwe"`
+		Remediation       *string  `json:"remediation"`
+		RemediationEffort *string  `json:"remediation_effort"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
 		writeErr(w, 400, "bad json: "+err.Error())
 		return
 	}
-	if body.Status == nil && body.Severity == nil && body.Name == nil && body.VulnClass == nil {
-		writeErr(w, 400, "nothing to update: provide status/severity/name/vulnclass")
+	if body.Status == nil && body.Severity == nil && body.Name == nil && body.VulnClass == nil &&
+		body.CvssVector == nil && body.Cwe == nil && body.Remediation == nil && body.RemediationEffort == nil {
+		writeErr(w, 400, "nothing to update: provide status/severity/name/vulnclass/cvss_vector/cwe/remediation/remediation_effort")
 		return
 	}
 	if body.Status != nil {
@@ -2328,6 +2351,7 @@ func (s *Server) patchFinding(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
+	identityChanged := false
 	if body.VulnClass != nil {
 		n, err := s.m.pg.SetFindingVulnClass(id, strings.TrimSpace(*body.VulnClass))
 		if err != nil {
@@ -2338,6 +2362,95 @@ func (s *Server) patchFinding(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, 404, "finding not found")
 			return
 		}
+		identityChanged = true
+	}
+	if body.Name != nil {
+		identityChanged = true
+	}
+	if body.CvssVector != nil {
+		vec := strings.TrimSpace(*body.CvssVector)
+		score := 0.0
+		derived := ""
+		if vec != "" {
+			parsed, err := cvss.Parse(vec)
+			if err != nil {
+				writeErr(w, 400, err.Error())
+				return
+			}
+			vec = parsed.String()
+			score = parsed.BaseScore()
+			derived = parsed.SeverityString()
+			if derived == cvss.SeverityNone {
+				derived = db.SeverityLow
+			}
+			if !db.ValidSeverity(derived) {
+				writeErr(w, 500, "derived severity not representable: "+derived)
+				return
+			}
+		}
+		n, err := s.m.pg.SetFindingCVSS(id, vec, score)
+		if err != nil {
+			writeErr(w, 500, err.Error())
+			return
+		}
+		if n == 0 {
+			writeErr(w, 404, "finding not found")
+			return
+		}
+		// The vector's band wins over the hand-set severity unless the caller
+		// explicitly sent both — then the explicit severity is authoritative.
+		if vec != "" && body.Severity == nil {
+			if _, err := s.m.pg.SetFindingSeverity(id, derived); err != nil {
+				writeErr(w, 500, err.Error())
+				return
+			}
+		}
+	}
+	if body.Cwe != nil {
+		cwe := strings.ToUpper(strings.TrimSpace(*body.Cwe))
+		if cwe != "" && !validCWE(cwe) {
+			writeErr(w, 400, "bad cwe: expected form CWE-<number>, got "+cwe)
+			return
+		}
+		n, err := s.m.pg.SetFindingCWE(id, cwe)
+		if err != nil {
+			writeErr(w, 500, err.Error())
+			return
+		}
+		if n == 0 {
+			writeErr(w, 404, "finding not found")
+			return
+		}
+	}
+	if body.Remediation != nil || body.RemediationEffort != nil {
+		current, err := s.m.pg.GetFinding(id)
+		if err != nil {
+			writeErr(w, 500, err.Error())
+			return
+		}
+		if current == nil {
+			writeErr(w, 404, "finding not found")
+			return
+		}
+		text := current.Remediation
+		if body.Remediation != nil {
+			text = strings.TrimSpace(*body.Remediation)
+		}
+		effort := current.RemediationEffort
+		if body.RemediationEffort != nil {
+			effort = strings.TrimSpace(*body.RemediationEffort)
+		}
+		if effort != "" && effort != "S" && effort != "M" && effort != "L" {
+			writeErr(w, 400, "bad remediation_effort: want S, M, L or empty")
+			return
+		}
+		if _, err := s.m.pg.SetFindingRemediation(id, text, effort); err != nil {
+			writeErr(w, 500, err.Error())
+			return
+		}
+	}
+	if identityChanged {
+		_, _ = s.m.pg.RefreshFindingDedupKey(id)
 	}
 	f, err := s.m.pg.GetFinding(id)
 	if err != nil {
@@ -3918,4 +4031,21 @@ func atoiDefault(s string, d int) int {
 		return n
 	}
 	return d
+}
+
+// validCWE checks the "CWE-<number>" identifier form used for findings.
+func validCWE(s string) bool {
+	if !strings.HasPrefix(s, "CWE-") {
+		return false
+	}
+	num := strings.TrimPrefix(s, "CWE-")
+	if num == "" || len(num) > 7 {
+		return false
+	}
+	for _, ch := range num {
+		if ch < '0' || ch > '9' {
+			return false
+		}
+	}
+	return true
 }

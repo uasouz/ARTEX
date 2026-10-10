@@ -9,6 +9,8 @@ import { ArrowLeftIcon, ArrowUpRightIcon, ShieldAlertIcon } from "lucide-react";
 import { toast } from "sonner";
 
 import { CopyButton } from "@/components/copy-button";
+import { CvssEditor } from "@/components/cvss-editor";
+import { FindingRemediationEditor } from "@/components/finding-remediation-editor";
 import { FindingRetestPanel } from "@/components/finding-retest-panel";
 import { FindingTrafficPanel } from "@/components/finding-traffic-panel";
 import { Markdown } from "@/components/markdown";
@@ -263,6 +265,24 @@ function FindingDetailInner() {
                   )}
                 </CardContent>
               </Card>
+              <Card>
+                <CardHeader className="flex-row items-center justify-between">
+                  <CardTitle className="text-sm">
+                    {locale === "pt"
+                      ? "Recomendações de Correção"
+                      : locale === "zh"
+                        ? "修复建议"
+                        : "Remediation Guidance"}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <FindingRemediationEditor
+                    finding={finding}
+                    readOnly={finding.inherited}
+                    onSaved={(f) => setFinding(f)}
+                  />
+                </CardContent>
+              </Card>
               <FindingTrafficPanel
                 key={id}
                 findingId={id}
@@ -352,6 +372,11 @@ function FindingDetailInner() {
                       </SelectContent>
                     </Select>
                   )}
+                </FieldRow>
+
+                {/* CVSS score */}
+                <FieldRow label={locale === "pt" ? "Pontuação CVSS" : locale === "zh" ? "CVSS 评分" : "CVSS Score"}>
+                  <CvssEditor finding={finding} readOnly={finding.inherited} onSaved={(f) => setFinding(f)} />
                 </FieldRow>
 
                 {/* Status */}

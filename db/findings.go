@@ -2,7 +2,9 @@ package db
 
 import (
 	"context"
+	"crypto/sha1"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,6 +21,7 @@ type DBFinding struct {
 	EvidenceVersion       int64
 	ReportEvidenceVersion int64
 	TrafficBindings       []FindingTrafficBinding // populated only for export
+	DuplicateCount        int                     // other open findings sharing this dedup key
 
 	ID              int64
 	TaskID          *int64
@@ -32,6 +35,12 @@ type DBFinding struct {
 	AssetIDs        []int64
 	Status          string
 	Report          string // 详细报告(Markdown);仅 GetFinding 填充,列表查询不带
+	CvssVector      string // CVSS 3.x 基础向量;空=未评分
+	CvssScore       float64
+	Cwe             string // 如 CWE-79;空=未标注
+	Remediation     string // 结构化修复建议(Markdown)
+	RemediationEffort string // S | M | L | ''
+	DedupKey        string
 	CreatedAt       time.Time
 	TaskDescription string // populated via LEFT JOIN on tasks
 }
@@ -76,6 +85,28 @@ func ValidSeverity(s string) bool {
 	return false
 }
 
+// findingDedupKey builds the cross-engagement duplicate-detection key: the
+// vulnerability class, the normalized readable name (falling back to the class),
+// and the sorted anchored asset ids. Findings sharing a key are the same issue
+// rediscovered on the same surface.
+func findingDedupKey(vulnclass, name string, assetIDs []int64) string {
+	norm := func(s string) string {
+		return strings.Join(strings.Fields(strings.ToLower(strings.TrimSpace(s))), " ")
+	}
+	name = norm(name)
+	if name == "" {
+		name = norm(vulnclass)
+	}
+	ids := append([]int64(nil), assetIDs...)
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] })
+	parts := make([]string, len(ids))
+	for i, id := range ids {
+		parts[i] = strconv.FormatInt(id, 10)
+	}
+	sum := sha1.Sum([]byte(norm(vulnclass) + "|" + name + "|" + strings.Join(parts, ",")))
+	return hex.EncodeToString(sum[:])
+}
+
 // AddFinding inserts a finding into the standalone findings table. taskID and
 // nodeID may be 0 (stored as NULL). name may be "" (frontend falls back to
 // vulnclass). Returns the new finding id.
@@ -93,9 +124,10 @@ func (d *DB) AddFinding(taskID, nodeID int64, vulnclass, name, severity, summary
 	}
 	var id int64
 	err := d.QueryRow(
-		`INSERT INTO findings (task_id, node_id, vulnclass, name, severity, summary, evidence, worker, asset_ids)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+		`INSERT INTO findings (task_id, node_id, vulnclass, name, severity, summary, evidence, worker, asset_ids, dedup_key)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING id`,
 		tid, nid, vulnclass, name, severity, summary, evidence, worker, string(aidsJSON),
+		findingDedupKey(vulnclass, name, assetIDs),
 	).Scan(&id)
 	return id, err
 }
@@ -105,7 +137,11 @@ func (d *DB) AddFinding(taskID, nodeID int64, vulnclass, name, severity, summary
 const findingSelectCols = `f.id, f.task_id, f.node_id, f.vulnclass, COALESCE(f.name, ''), f.severity, f.summary,
 	       f.evidence, f.worker, f.asset_ids, COALESCE(f.status, 'pending'), f.created_at,
 	       COALESCE(t.description, '') AS task_description, f.evidence_version, f.report_evidence_version,
- (SELECT count(*) FROM finding_traffic_bindings b WHERE b.finding_id=f.id)`
+	       COALESCE(f.cvss_vector, ''), COALESCE(f.cvss_score, 0), COALESCE(f.cwe, ''),
+	       COALESCE(f.remediation, ''), COALESCE(f.remediation_effort, ''), COALESCE(f.dedup_key, ''),
+ (SELECT count(*) FROM finding_traffic_bindings b WHERE b.finding_id=f.id),
+ (SELECT count(*) FROM findings f2 WHERE f2.dedup_key=f.dedup_key AND f.dedup_key<>'' AND f2.id<>f.id
+	    AND f2.status NOT IN ('false_positive','duplicate','ignored'))`
 
 // scanFindings materializes rows selected via findingSelectCols.
 func scanFindings(rows interface {
@@ -118,7 +154,8 @@ func scanFindings(rows interface {
 		f := &DBFinding{}
 		var aidsJSON string
 		if err := rows.Scan(&f.ID, &f.TaskID, &f.NodeID, &f.VulnClass, &f.Name, &f.Severity,
-			&f.Summary, &f.Evidence, &f.Worker, &aidsJSON, &f.Status, &f.CreatedAt, &f.TaskDescription, &f.EvidenceVersion, &f.ReportEvidenceVersion, &f.TrafficCount); err != nil {
+			&f.Summary, &f.Evidence, &f.Worker, &aidsJSON, &f.Status, &f.CreatedAt, &f.TaskDescription, &f.EvidenceVersion, &f.ReportEvidenceVersion,
+			&f.CvssVector, &f.CvssScore, &f.Cwe, &f.Remediation, &f.RemediationEffort, &f.DedupKey, &f.TrafficCount, &f.DuplicateCount); err != nil {
 			return nil, err
 		}
 		_ = json.Unmarshal([]byte(aidsJSON), &f.AssetIDs)
@@ -511,7 +548,8 @@ func (d *DB) ListFindingsForExport(f FindingFilter, ids []int64) ([]*DBFinding, 
 		var aidsJSON string
 		if err := rows.Scan(&f.ID, &f.TaskID, &f.NodeID, &f.VulnClass, &f.Name, &f.Severity,
 			&f.Summary, &f.Evidence, &f.Worker, &aidsJSON, &f.Status, &f.CreatedAt,
-			&f.TaskDescription, &f.EvidenceVersion, &f.ReportEvidenceVersion, &f.TrafficCount, &f.Report); err != nil {
+			&f.TaskDescription, &f.EvidenceVersion, &f.ReportEvidenceVersion,
+			&f.CvssVector, &f.CvssScore, &f.Cwe, &f.Remediation, &f.RemediationEffort, &f.DedupKey, &f.TrafficCount, &f.DuplicateCount, &f.Report); err != nil {
 			return nil, err
 		}
 		_ = json.Unmarshal([]byte(aidsJSON), &f.AssetIDs)
@@ -639,7 +677,8 @@ func (d *DB) GetFinding(id int64) (*DBFinding, error) {
 		WHERE f.id = $1`, id).Scan(
 		&f.ID, &f.TaskID, &f.NodeID, &f.VulnClass, &f.Name, &f.Severity,
 		&f.Summary, &f.Evidence, &f.Worker, &aidsJSON, &f.Status, &f.CreatedAt,
-		&f.TaskDescription, &f.EvidenceVersion, &f.ReportEvidenceVersion, &f.TrafficCount, &f.Report)
+		&f.TaskDescription, &f.EvidenceVersion, &f.ReportEvidenceVersion,
+		&f.CvssVector, &f.CvssScore, &f.Cwe, &f.Remediation, &f.RemediationEffort, &f.DedupKey, &f.TrafficCount, &f.DuplicateCount, &f.Report)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -747,6 +786,87 @@ func (d *DB) SetFindingName(id int64, name string) (int64, error) {
 // SetFindingVulnClass updates one finding's 漏洞类别 (+ node payload sync).
 func (d *DB) SetFindingVulnClass(id int64, vulnclass string) (int64, error) {
 	return d.setFindingCol(id, "vulnclass", "vulnclass", vulnclass)
+}
+
+// SetFindingCVSS updates the CVSS vector + score (and refreshes the dedup key,
+// since name/class edits can change identity). Returns rows affected.
+func (d *DB) SetFindingCVSS(id int64, vector string, score float64) (int64, error) {
+	res, err := d.Exec(`UPDATE findings SET cvss_vector=$1, cvss_score=$2 WHERE id=$3`, vector, score, id)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
+// SetFindingCWE updates the CWE identifier (e.g. "CWE-79"); empty clears it.
+func (d *DB) SetFindingCWE(id int64, cwe string) (int64, error) {
+	res, err := d.Exec(`UPDATE findings SET cwe=$1 WHERE id=$2`, cwe, id)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
+// SetFindingRemediation updates the structured fix guidance and its effort band
+// (S | M | L | ''). Returns rows affected.
+func (d *DB) SetFindingRemediation(id int64, remediation, effort string) (int64, error) {
+	res, err := d.Exec(`UPDATE findings SET remediation=$1, remediation_effort=$2 WHERE id=$3`, remediation, effort, id)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
+// RefreshFindingDedupKey recomputes one finding's dedup key after an identity
+// edit (name / vulnclass / assets). Returns rows affected.
+func (d *DB) RefreshFindingDedupKey(id int64) (int64, error) {
+	f, err := d.GetFinding(id)
+	if err != nil || f == nil {
+		return 0, err
+	}
+	res, err := d.Exec(`UPDATE findings SET dedup_key=$1 WHERE id=$2`, findingDedupKey(f.VulnClass, f.Name, f.AssetIDs), id)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
+// BackfillFindingDedupKeys recomputes dedup keys for rows that lack one (older
+// rows created before the column existed). Idempotent.
+func (d *DB) BackfillFindingDedupKeys() (int64, error) {
+	rows, err := d.Query(`SELECT f.id, f.vulnclass, COALESCE(f.name,''), f.asset_ids
+		FROM findings f WHERE f.dedup_key=''`)
+	if err != nil {
+		return 0, err
+	}
+	defer rows.Close()
+	type row struct {
+		id    int64
+		class string
+		name  string
+		ids   []int64
+	}
+	var list []row
+	for rows.Next() {
+		var r row
+		var aidsJSON string
+		if err := rows.Scan(&r.id, &r.class, &r.name, &aidsJSON); err != nil {
+			return 0, err
+		}
+		_ = json.Unmarshal([]byte(aidsJSON), &r.ids)
+		list = append(list, r)
+	}
+	if err := rows.Err(); err != nil {
+		return 0, err
+	}
+	var n int64
+	for _, r := range list {
+		if _, err := d.Exec(`UPDATE findings SET dedup_key=$1 WHERE id=$2`, findingDedupKey(r.class, r.name, r.ids), r.id); err != nil {
+			return n, err
+		}
+		n++
+	}
+	return n, nil
 }
 
 // FindingMeta is the standalone-row data (id, triage state, anchored assets) the

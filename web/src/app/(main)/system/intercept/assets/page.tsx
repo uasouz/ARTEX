@@ -121,7 +121,7 @@ const I18N = {
     toastLoadFailed: "Failed to load asset interception rules",
     toastUpdated: "Rule updated",
     toastCreated: "Rule created",
-    confirmDelete: (p: string) => `Delete asset interception rule \"${p}\"?`,
+    confirmDelete: (p: string) => `Delete asset interception rule "${p}"?`,
     toastDeleted: "Rule deleted",
   },
   pt: {
@@ -158,7 +158,7 @@ const I18N = {
     toastLoadFailed: "Falha ao carregar regras de interceptação",
     toastUpdated: "Regra atualizada",
     toastCreated: "Regra criada",
-    confirmDelete: (p: string) => `Excluir regra de interceptação \"${p}\"?`,
+    confirmDelete: (p: string) => `Excluir regra de interceptação "${p}"?`,
     toastDeleted: "Regra excluída",
   },
   zh: {

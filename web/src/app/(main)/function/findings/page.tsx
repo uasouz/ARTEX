@@ -252,7 +252,7 @@ export default function FindingsPage() {
   const [selectedIds, setSelectedIds] = React.useState<Set<string>>(() => new Set());
   const [exportOpen, setExportOpen] = React.useState(false);
   const [exportScope, setExportScope] = React.useState<"filtered" | "all" | "selected">("filtered");
-  const [exportFormat, setExportFormat] = React.useState<"md-single" | "md-zip" | "csv" | "json">("md-single");
+  const [exportFormat, setExportFormat] = React.useState<"md-single" | "md-zip" | "csv" | "json" | "pdf">("md-single");
   const [exporting, setExporting] = React.useState(false);
 
   const toggleSelected = React.useCallback((id: string, checked: boolean) => {
@@ -1439,6 +1439,14 @@ export default function FindingsPage() {
                     : locale === "zh"
                       ? "CSV 表格（.csv）"
                       : "Tabular Spreadsheet (.csv)"}
+                </label>
+                <label htmlFor="export-format-pdf" className="flex items-center gap-2 text-sm">
+                  <RadioGroupItem id="export-format-pdf" value="pdf" />
+                  {locale === "pt"
+                    ? "Relatório PDF para Cliente (marca CIRDAN, com CVSS)"
+                    : locale === "zh"
+                      ? "客户交付 PDF 报告（CIRDAN 品牌，含 CVSS）"
+                      : "Client-Facing PDF Report (CIRDAN-branded, with CVSS)"}
                 </label>
                 <label htmlFor="export-format-json" className="flex items-center gap-2 text-sm">
                   <RadioGroupItem id="export-format-json" value="json" />
