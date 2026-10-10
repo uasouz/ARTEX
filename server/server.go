@@ -228,6 +228,7 @@ func New(ctx context.Context, m *Manager, skillDir string, dataDir string, keyDi
 		}
 		go s.evidenceStore().RunGC(s.ctx)
 		s.seedPythonInterpreter()     // 自定义脚本工具:开机检测 python 解释器入库(仅空时)
+		s.seedProToolPack()           // Pro Tool Pack:已安装的专业扫描 CLI 自动注册为 agent 工具(仅缺失时)
 		go newScheduler(s).Run(s.ctx) // P3 触发器调度(定时/finding/目标事件),仅自定义 agent
 		// One-time backfill: rows created before the dedup_key column existed get
 		// their key computed so duplicate detection covers historical findings too.

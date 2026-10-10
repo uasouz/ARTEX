@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -169,7 +170,7 @@ func (s *Server) pgTestCustomTool(w http.ResponseWriter, r *http.Request) {
 	case "http":
 		res, _ = s.runHTTPTool(ctx, req.Exec, params, tc)
 	case "shell":
-		writeErr(w, 400, "shell 类型工具是 bash 环境声明，无可执行内容")
+		writeErr(w, 400, "shell 类型工具是 bash 环境声明，无可视执行内容")
 		return
 	default:
 		writeErr(w, 400, "未知工具类型: "+req.Kind)
@@ -493,13 +494,19 @@ func identity(s string) string { return s }
 // shellQuote single-quotes a value for safe shell interpolation.
 func shellQuote(s string) string { return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'" }
 
+var rePlaceholder = regexp.MustCompile(`\{[a-zA-Z_][a-zA-Z0-9_]*\}`)
+
 // renderTemplate replaces {name} placeholders with each param's rendered value.
+// Any placeholder not supplied in params is replaced with quote("") so missing
+// optional parameters never leak as literal `{name}` into commands or URLs.
 func renderTemplate(tmpl string, params map[string]any, quote func(string) string) string {
-	out := tmpl
-	for k, v := range params {
-		out = strings.ReplaceAll(out, "{"+k+"}", quote(valToStr(v)))
-	}
-	return out
+	return rePlaceholder.ReplaceAllStringFunc(tmpl, func(match string) string {
+		key := match[1 : len(match)-1]
+		if v, ok := params[key]; ok {
+			return quote(valToStr(v))
+		}
+		return quote("")
+	})
 }
 
 // valToStr renders a param value: scalars as-is, arrays/objects as compact JSON.
