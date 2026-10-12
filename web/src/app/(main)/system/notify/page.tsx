@@ -567,7 +567,7 @@ export default function NotifyPage() {
           </div>
           <div className="sm:col-span-2">
             <Button onClick={saveGlobal} disabled={globalSaving}>
-              保存全局设置
+              {globalSaving ? t.saving : t.saveGlobalBtn}
             </Button>
           </div>
         </CardContent>

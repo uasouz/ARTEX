@@ -2938,7 +2938,7 @@ function SourceTaskPicker({
                 <div className="flex min-w-0 flex-1 items-center gap-2">
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">
-                      #{taskID} · {task?.description ?? "未知任务"}
+                      #{taskID} · {task?.description ?? (locale === "pt" ? "Tarefa desconhecida" : locale === "zh" ? "未知任务" : "Unknown task")}
                     </p>
                     {task?.goal && <p className="text-muted-foreground truncate text-xs">{task.goal}</p>}
                   </div>
@@ -3010,9 +3010,9 @@ function CategoryPicker({
       onValueChange(created.id);
       setInputValue("");
       onCategoryCreated();
-      toast.success(`已创建分类「${created.name}」`);
+      toast.success(locale === "pt" ? `Categoria "${created.name}" criada` : locale === "zh" ? `已创建分类「${created.name}」` : `Created category "${created.name}"`);
     } catch (e) {
-      toast.error(`创建分类失败：${(e as Error).message}`);
+      toast.error((locale === "pt" ? "Falha ao criar categoria: " : locale === "zh" ? "创建分类失败：" : "Failed to create category: ") + (e as Error).message);
     } finally {
       setCreating(false);
     }
@@ -3036,7 +3036,7 @@ function CategoryPicker({
       <ComboboxChips>
         <ComboboxValue>
           {selectedIDs.map((id) => (
-            <ComboboxChip key={id}>{byID.get(id)?.name ?? "未知分类"}</ComboboxChip>
+            <ComboboxChip key={id}>{byID.get(id)?.name ?? (locale === "pt" ? "Categoria desconhecida" : locale === "zh" ? "未知分类" : "Unknown Category")}</ComboboxChip>
           ))}
         </ComboboxValue>
         <ComboboxChipsInput
@@ -3083,29 +3083,29 @@ function CategoryPicker({
                   : `Create category "${trimmed}"`}
             </button>
           ) : (
-            <div className="px-2 py-2 text-sm text-muted-foreground">输入名称以搜索或创建分类</div>
+            <div className="px-2 py-2 text-sm text-muted-foreground">{locale === "pt" ? "Digite um nome para buscar ou criar categoria" : locale === "zh" ? "输入名称以搜索或创建分类" : "Enter a name to search or create category"}</div>
           ))}
       </ComboboxContent>
     </Combobox>
   );
 }
 
-const COMPANY_SCOPE_LABELS: Record<string, string> = {
-  domain: "域名",
-  ip: "IP",
-  cidr: "CIDR",
-  icp: "ICP",
-  keyword: "关键词",
-};
+function getCompanyScopeLabels(locale: Locale): Record<string, string> {
+  if (locale === "pt") return { domain: "Domínio", ip: "IP", cidr: "CIDR", icp: "ICP", keyword: "Palavra-chave" };
+  if (locale === "zh") return { domain: "域名", ip: "IP", cidr: "CIDR", icp: "ICP", keyword: "关键词" };
+  return { domain: "Domain", ip: "IP", cidr: "CIDR", icp: "ICP", keyword: "Keyword" };
+}
 
-function companyScopeSummary(company: Company): string {
+function companyScopeSummary(company: Company, locale: Locale = "en"): string {
   const rows = company.scope ?? [];
-  if (rows.length === 0) return "未配置资产范围";
+  if (rows.length === 0) return locale === "pt" ? "Sem escopo configurado" : locale === "zh" ? "未配置资产范围" : "No scope configured";
+  const labels = getCompanyScopeLabels(locale);
   const preview = rows.slice(0, 3).map((row) => {
     const value = row.raw || row.value || row.domain || row.net || "";
-    return `${COMPANY_SCOPE_LABELS[row.kind] ?? row.kind}：${value}`;
+    return `${labels[row.kind] ?? row.kind}: ${value}`;
   });
-  return `${preview.join(" · ")}${rows.length > preview.length ? ` · 另 ${rows.length - preview.length} 条` : ""}`;
+  const more = locale === "pt" ? ` · mais ${rows.length - preview.length}` : locale === "zh" ? ` · 另 ${rows.length - preview.length} 条` : ` · +${rows.length - preview.length} more`;
+  return `${preview.join(" · ")}${rows.length > preview.length ? more : ""}`;
 }
 
 function CompanyPicker({
@@ -3132,7 +3132,7 @@ function CompanyPicker({
       items={companyIDs}
       itemToStringValue={(companyID) => {
         const company = companiesByID.get(companyID);
-        return company ? `${company.name} ${companyScopeSummary(company)}` : companyID;
+        return company ? `${company.name} ${companyScopeSummary(company, locale)}` : companyID;
       }}
       multiple
       value={selectedIDs}
@@ -3141,7 +3141,7 @@ function CompanyPicker({
       <ComboboxChips>
         <ComboboxValue>
           {selectedIDs.map((companyID) => (
-            <ComboboxChip key={companyID}>{companiesByID.get(companyID)?.name ?? `企业 #${companyID}`}</ComboboxChip>
+            <ComboboxChip key={companyID}>{companiesByID.get(companyID)?.name ?? (locale === "pt" ? `Empresa #${companyID}` : locale === "zh" ? `企业 #${companyID}` : `Company #${companyID}`)}</ComboboxChip>
           ))}
         </ComboboxValue>
         <ComboboxChipsInput
@@ -3170,14 +3170,14 @@ function CompanyPicker({
               <ComboboxItem key={companyID} value={companyID}>
                 <div className="flex min-w-0 flex-1 flex-col gap-0.5">
                   <div className="flex min-w-0 items-center gap-2">
-                    <span className="min-w-0 flex-1 truncate font-medium">{company?.name ?? `企业 #${companyID}`}</span>
+                    <span className="min-w-0 flex-1 truncate font-medium">{company?.name ?? (locale === "pt" ? `Empresa #${companyID}` : locale === "zh" ? `企业 #${companyID}` : `Company #${companyID}`)}</span>
                     <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
                       {company?.asset_count ?? 0} {locale === "pt" ? "ativos" : locale === "zh" ? "个资产" : "assets"}
                     </span>
                   </div>
                   {company && (
-                    <span className="text-muted-foreground truncate text-xs" title={companyScopeSummary(company)}>
-                      {companyScopeSummary(company)}
+                    <span className="text-muted-foreground truncate text-xs" title={companyScopeSummary(company, locale)}>
+                      {companyScopeSummary(company, locale)}
                     </span>
                   )}
                 </div>
@@ -3207,6 +3207,7 @@ function CategoryDropTarget({
   disabled: boolean;
   onSelect: () => void;
 }) {
+  const { locale } = useI18n();
   const { isOver, setNodeRef } = useDroppable({ id: `category:${value}`, disabled });
 
   return (
@@ -3221,12 +3222,17 @@ function CategoryDropTarget({
       onClick={onSelect}
     >
       <span className="block truncate font-medium text-sm">{name}</span>
-      <span className="block truncate text-muted-foreground text-xs">{isOver ? "松开以移动" : `${count} 个任务`}</span>
+      <span className="block truncate text-muted-foreground text-xs">
+        {isOver
+          ? (locale === "pt" ? "Soltar para mover" : locale === "zh" ? "松开以移动" : "Drop to move")
+          : (locale === "pt" ? `${count} tarefas` : locale === "zh" ? `${count} 个任务` : `${count} tasks`)}
+      </span>
     </button>
   );
 }
 
 function DraggableCategoryTask({ task, disabled, moving }: { task: Task; disabled: boolean; moving: boolean }) {
+  const { locale } = useI18n();
   const { attributes, isDragging, listeners, setNodeRef } = useDraggable({
     id: `task:${task.id}`,
     disabled,
@@ -3246,8 +3252,8 @@ function DraggableCategoryTask({ task, disabled, moving }: { task: Task; disable
             disabled={disabled}
             {...listeners}
             {...attributes}
-            aria-label={`拖动任务 #${task.id}`}
-            title="拖动任务"
+            aria-label={locale === "pt" ? `Arrastar tarefa #${task.id}` : locale === "zh" ? `拖动任务 #${task.id}` : `Drag task #${task.id}`}
+            title={locale === "pt" ? "Arrastar tarefa" : locale === "zh" ? "拖动任务" : "Drag task"}
           >
             <GripVerticalIcon />
           </Button>
@@ -3256,7 +3262,7 @@ function DraggableCategoryTask({ task, disabled, moving }: { task: Task; disable
       <ItemContent className="min-w-0">
         <ItemTitle className="w-full min-w-0">
           <Link href={`/function/tasks/detail?id=${encodeURIComponent(task.id)}`} className="truncate hover:underline">
-            {task.name?.trim() || task.description || `任务 #${task.id}`}
+            {task.name?.trim() || task.description || (locale === "pt" ? `Tarefa #${task.id}` : locale === "zh" ? `任务 #${task.id}` : `Task #${task.id}`)}
           </Link>
         </ItemTitle>
         <ItemDescription className="line-clamp-1">
@@ -3271,6 +3277,7 @@ function DraggableCategoryTask({ task, disabled, moving }: { task: Task; disable
 }
 
 function CategoryTaskDragPreview({ task }: { task: Task }) {
+  const { locale } = useI18n();
   return (
     <Item variant="outline" size="sm" className="w-80 bg-background shadow-lg">
       <ItemMedia className="group-has-data-[slot=item-description]/item:self-center group-has-data-[slot=item-description]/item:translate-y-0">
@@ -3278,7 +3285,7 @@ function CategoryTaskDragPreview({ task }: { task: Task }) {
       </ItemMedia>
       <ItemContent className="min-w-0">
         <ItemTitle className="w-full min-w-0 truncate">
-          {task.name?.trim() || task.description || `任务 #${task.id}`}
+          {task.name?.trim() || task.description || (locale === "pt" ? `Tarefa #${task.id}` : locale === "zh" ? `任务 #${task.id}` : `Task #${task.id}`)}
         </ItemTitle>
         <ItemDescription className="line-clamp-1">#{task.id}</ItemDescription>
       </ItemContent>
@@ -3369,15 +3376,27 @@ function CategoryManagementSheet({
         const created = await api.createTaskCategory(name);
         setSelectedView(created.id);
         setDraftName(created.name);
-        toast.success("分类已创建");
+        toast.success(locale === "pt" ? "Categoria criada com sucesso" : locale === "zh" ? "分类已创建" : "Category created successfully");
       } else {
         const updated = await api.renameTaskCategory(selectedView, name);
         setDraftName(updated.name);
-        toast.success("分类已更新");
+        toast.success(locale === "pt" ? "Categoria atualizada com sucesso" : locale === "zh" ? "分类已更新" : "Category updated successfully");
       }
       onChanged();
     } catch (error) {
-      toast.error(`${selectedView === "new" ? "创建" : "更新"}分类失败：${(error as Error).message}`);
+      toast.error(
+        (selectedView === "new"
+          ? locale === "pt"
+            ? "Falha ao criar categoria: "
+            : locale === "zh"
+              ? "创建分类失败："
+              : "Failed to create category: "
+          : locale === "pt"
+            ? "Falha ao atualizar categoria: "
+            : locale === "zh"
+              ? "更新分类失败："
+              : "Failed to update category: ") + (error as Error).message,
+      );
     } finally {
       setSaving(false);
     }
@@ -3392,11 +3411,23 @@ function CategoryManagementSheet({
       const next = categories.find((category) => category.id !== deletedID);
       if (next) selectCategory(next);
       else selectUncategorized();
-      toast.success("分类已删除，关联任务已移入未分类");
+      toast.success(
+        locale === "pt"
+          ? "Categoria excluída, tarefas vinculadas movidas para Não Categorizado"
+          : locale === "zh"
+            ? "分类已删除，关联任务已移入未分类"
+            : "Category deleted, linked tasks moved to Uncategorized",
+      );
       setDeleteOpen(false);
       onChanged();
     } catch (error) {
-      toast.error(`删除分类失败：${(error as Error).message}`);
+      toast.error(
+        (locale === "pt"
+          ? "Falha ao excluir categoria: "
+          : locale === "zh"
+            ? "删除分类失败："
+            : "Failed to delete category: ") + (error as Error).message,
+      );
     } finally {
       setDeleting(false);
     }
@@ -3407,7 +3438,13 @@ function CategoryManagementSheet({
     const category =
       destination === "uncategorized" ? null : (categories.find((item) => item.id === Number(destination)) ?? null);
     if (destination !== "uncategorized" && !category) {
-      toast.error("目标分类不存在，请刷新后重试");
+      toast.error(
+        locale === "pt"
+          ? "Categoria de destino não existe, atualize a página"
+          : locale === "zh"
+            ? "目标分类不存在，请刷新后重试"
+            : "Target category does not exist, please refresh",
+      );
       return;
     }
     if (task.category_id === category?.id || (task.category_id == null && category == null)) return;
@@ -3416,9 +3453,21 @@ function CategoryManagementSheet({
     try {
       await api.updateTaskCategory(task.id, category?.id);
       onTaskMoved(task.id, category);
-      toast.success(`任务 #${task.id} 已移至「${category?.name ?? "未分类"}」`);
+      toast.success(
+        locale === "pt"
+          ? `Tarefa #${task.id} movida para "${category?.name ?? "Não Categorizado"}"`
+          : locale === "zh"
+            ? `任务 #${task.id} 已移至「${category?.name ?? "未分类"}」`
+            : `Task #${task.id} moved to "${category?.name ?? "Uncategorized"}"`,
+      );
     } catch (error) {
-      toast.error(`移动任务失败：${(error as Error).message}`);
+      toast.error(
+        (locale === "pt"
+          ? "Falha ao mover tarefa: "
+          : locale === "zh"
+            ? "移动任务失败："
+            : "Failed to move task: ") + (error as Error).message,
+      );
     } finally {
       setMovingTaskID(null);
     }
@@ -3441,7 +3490,23 @@ function CategoryManagementSheet({
     void moveTask(task, destination.slice("category:".length));
   }
 
-  const saveLabel = saving ? "保存中" : selectedView === "new" ? "创建分类" : "保存修改";
+  const saveLabel = saving
+    ? locale === "pt"
+      ? "Salvando..."
+      : locale === "zh"
+        ? "保存中"
+        : "Saving..."
+    : selectedView === "new"
+      ? locale === "pt"
+        ? "Criar Categoria"
+        : locale === "zh"
+          ? "创建分类"
+          : "Create Category"
+      : locale === "pt"
+        ? "Salvar Alterações"
+        : locale === "zh"
+          ? "保存修改"
+          : "Save Changes";
 
   return (
     <>
@@ -3516,7 +3581,7 @@ function CategoryManagementSheet({
                         id="task-category-name"
                         value={draftName}
                         onChange={(event) => setDraftName(event.target.value)}
-                        placeholder="例如：外网评估"
+                        placeholder={locale === "pt" ? "Ex: Avaliação Externa" : locale === "zh" ? "例如：外网评估" : "e.g. External Assessment"}
                         maxLength={80}
                         onKeyDown={(event) => {
                           if (event.key === "Enter") void saveCategory();
@@ -3524,8 +3589,16 @@ function CategoryManagementSheet({
                       />
                       <FieldDescription>
                         {selectedCategory
-                          ? `当前有 ${selectedCategory.task_count} 个任务使用该分类。重命名后会同步更新任务列表。`
-                          : "创建后可在新建任务和任务列表筛选中使用。"}
+                          ? locale === "pt"
+                            ? `Atualmente ${selectedCategory.task_count} tarefa(s) usam esta categoria. Renomear atualizará a lista.`
+                            : locale === "zh"
+                              ? `当前有 ${selectedCategory.task_count} 个任务使用该分类。重命名后会同步更新任务列表。`
+                              : `Currently ${selectedCategory.task_count} task(s) use this category. Renaming will update the task list.`
+                          : locale === "pt"
+                            ? "Após a criação, pode ser usada em novas tarefas e filtros."
+                            : locale === "zh"
+                              ? "创建后可在新建任务和任务列表筛选中使用。"
+                              : "Can be used in new tasks and filters after creation."}
                       </FieldDescription>
                     </Field>
                   )}
@@ -3533,19 +3606,57 @@ function CategoryManagementSheet({
                     <Field>
                       <div className="flex flex-wrap items-end justify-between gap-2">
                         <div className="flex min-w-0 flex-col gap-1">
-                          <FieldLabel>{selectedCategory ? "分类任务" : "未分类任务"}</FieldLabel>
+                          <FieldLabel>
+                            {selectedCategory
+                              ? locale === "pt"
+                                ? "Tarefas da Categoria"
+                                : locale === "zh"
+                                  ? "分类任务"
+                                  : "Category Tasks"
+                              : locale === "pt"
+                                ? "Tarefas Não Categorizadas"
+                                : locale === "zh"
+                                  ? "未分类任务"
+                                  : "Uncategorized Tasks"}
+                          </FieldLabel>
                           <FieldDescription>
                             {selectedCategory
-                              ? `该分类包含 ${visibleTasks.length} 个任务。`
-                              : `当前有 ${visibleTasks.length} 个任务尚未分类。`}
+                              ? locale === "pt"
+                                ? `Esta categoria contém ${visibleTasks.length} tarefa(s).`
+                                : locale === "zh"
+                                  ? `该分类包含 ${visibleTasks.length} 个任务。`
+                                  : `This category contains ${visibleTasks.length} task(s).`
+                              : locale === "pt"
+                                ? `Atualmente ${visibleTasks.length} tarefa(s) não estão categorizadas.`
+                                : locale === "zh"
+                                  ? `当前有 ${visibleTasks.length} 个任务尚未分类。`
+                                  : `Currently ${visibleTasks.length} task(s) are uncategorized.`}
                           </FieldDescription>
                         </div>
                       </div>
                       {visibleTasks.length === 0 ? (
                         <Empty className="min-h-36 border">
                           <EmptyHeader>
-                            <EmptyTitle>{selectedCategory ? "该分类暂无任务" : "暂无未分类任务"}</EmptyTitle>
-                            <EmptyDescription>此处将在任务归入后显示内容。</EmptyDescription>
+                            <EmptyTitle>
+                              {selectedCategory
+                                ? locale === "pt"
+                                  ? "Nenhuma tarefa nesta categoria"
+                                  : locale === "zh"
+                                    ? "该分类暂无任务"
+                                    : "No tasks in this category"
+                                : locale === "pt"
+                                  ? "Nenhuma tarefa não categorizada"
+                                  : locale === "zh"
+                                    ? "暂无未分类任务"
+                                    : "No uncategorized tasks"}
+                            </EmptyTitle>
+                            <EmptyDescription>
+                              {locale === "pt"
+                                ? "As tarefas aparecerão aqui quando forem atribuídas."
+                                : locale === "zh"
+                                  ? "此处将在任务归入后显示内容。"
+                                  : "Tasks will appear here once assigned."}
+                            </EmptyDescription>
                           </EmptyHeader>
                         </Empty>
                       ) : (
@@ -3577,11 +3688,11 @@ function CategoryManagementSheet({
                 onClick={() => setDeleteOpen(true)}
               >
                 <Trash2Icon data-icon="inline-start" />
-                删除分类
+                {locale === "pt" ? "Excluir Categoria" : locale === "zh" ? "删除分类" : "Delete Category"}
               </Button>
             )}
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-              关闭
+              {locale === "pt" ? "Fechar" : locale === "zh" ? "关闭" : "Close"}
             </Button>
             {selectedView !== "uncategorized" && (
               <Button
@@ -3599,13 +3710,23 @@ function CategoryManagementSheet({
       <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>删除分类「{selectedCategory?.name || "未命名分类"}」？</AlertDialogTitle>
+            <AlertDialogTitle>
+              {locale === "pt"
+                ? `Excluir categoria "${selectedCategory?.name || "Sem nome"}"?`
+                : locale === "zh"
+                  ? `删除分类「${selectedCategory?.name || "未命名分类"}」？`
+                  : `Delete category "${selectedCategory?.name || "Unnamed"}"?`}
+            </AlertDialogTitle>
             <AlertDialogDescription>
-              分类删除后，其中 {selectedCategory?.task_count ?? 0} 个任务会自动移入“未分类”，任务数据不会被删除。
+              {locale === "pt"
+                ? `Após a exclusão, ${selectedCategory?.task_count ?? 0} tarefa(s) serão movidas para "Não Categorizado". Nenhum dado de tarefa será perdido.`
+                : locale === "zh"
+                  ? `分类删除后，其中 ${selectedCategory?.task_count ?? 0} 个任务会自动移入“未分类”，任务数据不会被删除。`
+                  : `After deletion, ${selectedCategory?.task_count ?? 0} task(s) will be moved to "Uncategorized". Task data will not be deleted.`}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={deleting}>取消</AlertDialogCancel>
+            <AlertDialogCancel disabled={deleting}>{d.common.cancel}</AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
               disabled={deleting}
@@ -3615,7 +3736,17 @@ function CategoryManagementSheet({
               }}
             >
               {deleting && <Spinner data-icon="inline-start" />}
-              {deleting ? "删除中" : "删除"}
+              {deleting
+                ? locale === "pt"
+                  ? "Excluindo..."
+                  : locale === "zh"
+                    ? "删除中"
+                    : "Deleting..."
+                : locale === "pt"
+                  ? "Excluir"
+                  : locale === "zh"
+                    ? "删除"
+                    : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -3687,7 +3818,7 @@ function CreateTaskSheet({
       setDescription((prev) => appendUploads(prev, r.attachments));
       setUploadCount((n) => n + r.attachments.length);
     } catch (e) {
-      toast.error("上传失败：" + (e as Error).message);
+      toast.error((locale === "pt" ? "Falha no upload: " : locale === "zh" ? "上传失败：" : "Upload failed: ") + (e as Error).message);
     } finally {
       setUploading(false);
       if (fileInputRef.current) fileInputRef.current.value = ""; // allow re-picking the same file
@@ -3696,11 +3827,11 @@ function CreateTaskSheet({
 
   async function createTask() {
     if (!description.trim() || !goal.trim()) {
-      toast.error("请填写描述与目标");
+      toast.error(locale === "pt" ? "Preencha a descrição e o objetivo" : locale === "zh" ? "请填写描述与目标" : "Please provide description and goal");
       return;
     }
     if (sourceTaskIDs.length > MAX_SOURCE_TASKS) {
-      toast.error(`最多关联 ${MAX_SOURCE_TASKS} 个来源任务`);
+      toast.error(locale === "pt" ? `Máximo de ${MAX_SOURCE_TASKS} tarefas de origem` : locale === "zh" ? `最多关联 ${MAX_SOURCE_TASKS} 个来源任务` : `Maximum ${MAX_SOURCE_TASKS} source tasks`);
       return;
     }
     setCreating(true);
@@ -3723,7 +3854,7 @@ function CreateTaskSheet({
           .map((r) => ({ ...r, pattern: r.pattern.trim() }))
           .filter((r) => r.pattern !== ""),
       });
-      toast.success("任务已创建");
+      toast.success(locale === "pt" ? "Tarefa criada com sucesso" : locale === "zh" ? "任务已创建" : "Task created successfully");
       setName("");
       setCategoryID(undefined);
       setDescription("");
@@ -3742,7 +3873,7 @@ function CreateTaskSheet({
       setOpen(false);
       onCreated();
     } catch (e) {
-      toast.error("创建失败：" + (e as Error).message);
+      toast.error((locale === "pt" ? "Falha ao criar tarefa: " : locale === "zh" ? "创建失败：" : "Failed to create task: ") + (e as Error).message);
     } finally {
       setCreating(false);
     }
@@ -3752,7 +3883,7 @@ function CreateTaskSheet({
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
         <Button size="sm">
-          <PlusIcon /> 新建任务
+          <PlusIcon /> {d.tasks.newTask}
         </Button>
       </SheetTrigger>
       {/* 45vw 宽的右侧抽屉:整屏高度可滚动,长表单不再受弹窗高度限制。窄屏退化为全宽。
@@ -3805,7 +3936,13 @@ function CreateTaskSheet({
                 onCategoryCreated={onCategoriesChanged}
                 portalContainer={sheetContentRef}
               />
-              <FieldDescription>可选，单个分类；用于任务列表筛选和归档，不影响 Agent 执行。</FieldDescription>
+              <FieldDescription>
+                {locale === "pt"
+                  ? "Opcional, categoria única; usada para filtros e arquivamento, não afeta a execução do Agent."
+                  : locale === "zh"
+                    ? "可选，单个分类；用于任务列表筛选和归档，不影响 Agent 执行。"
+                    : "Optional, single category; used for task list filtering and archiving, does not affect Agent execution."}
+              </FieldDescription>
             </Field>
             <div className="grid gap-2">
               <Label htmlFor="description">{d.tasks.createTargetLabel}</Label>
@@ -3833,12 +3970,20 @@ function CreateTaskSheet({
                   disabled={uploading}
                 >
                   {uploading ? <Loader2Icon className="animate-spin" /> : <PaperclipIcon />}
-                  上传文件
+                  {d.tasks.createUploadFilesBtn}
                 </Button>
                 <span className="text-muted-foreground text-xs">
                   {uploadCount > 0
-                    ? `已上传 ${uploadCount} 个文件，绝对路径已追加到描述末尾（可编辑）`
-                    : "可多选；上传后把文件的绝对路径追加到描述，供 worker 用 Read/Bash 打开"}
+                    ? locale === "pt"
+                      ? `${uploadCount} arquivo(s) enviado(s), caminho(s) absoluto(s) anexados à descrição (editável)`
+                      : locale === "zh"
+                        ? `已上传 ${uploadCount} 个文件，绝对路径已追加到描述末尾（可编辑）`
+                        : `${uploadCount} file(s) uploaded, absolute path(s) appended to description (editable)`
+                    : locale === "pt"
+                      ? "Múltiplos arquivos permitidos; caminhos anexados à descrição para o worker abrir via Read/Bash"
+                      : locale === "zh"
+                        ? "可多选；上传后把文件的绝对路径追加到描述，供 worker 用 Read/Bash 打开"
+                        : "Multiple files supported; absolute paths appended to description for worker to access via Read/Bash"}
                 </span>
               </div>
             </div>
@@ -3861,8 +4006,11 @@ function CreateTaskSheet({
                 portalContainer={sheetContentRef}
               />
               <FieldDescription>
-                最多关联 {MAX_SOURCE_TASKS}{" "}
-                个任务。实时只读继承所选任务的持久化黑板、资产范围及相关流量；新任务写入独立黑板。
+                {locale === "pt"
+                  ? `Vincular até ${MAX_SOURCE_TASKS} tarefas. Herda em tempo real o blackboard, escopo de ativos e tráfego associado; nova tarefa grava em blackboard isolado.`
+                  : locale === "zh"
+                    ? `最多关联 ${MAX_SOURCE_TASKS} 个任务。实时只读继承所选任务的持久化黑板、资产范围及相关流量；新任务写入独立黑板。`
+                    : `Link up to ${MAX_SOURCE_TASKS} tasks. Inherits read-only persistent blackboard, asset scope, and traffic; new task writes to isolated blackboard.`}
               </FieldDescription>
             </Field>
             <Field>
@@ -3874,8 +4022,11 @@ function CreateTaskSheet({
                 portalContainer={sheetContentRef}
               />
               <FieldDescription>
-                创建任务时会将所选企业当前已有资产加入“测试资产”，并将域名、IP、CIDR、ICP 和企业关键词提供给 Agent
-                作为范围上下文；不会自动生成意图或强制改变执行目标。
+                {locale === "pt"
+                  ? "Ativos da empresa selecionada serão adicionados aos ativos de teste, fornecendo domínios, IPs, CIDRs e palavras-chave como contexto para o Agent."
+                  : locale === "zh"
+                    ? "创建任务时会将所选企业当前已有资产加入“测试资产”，并将域名、IP、CIDR、ICP 和企业关键词提供给 Agent 作为范围上下文；不会自动生成意图或强制改变执行目标。"
+                    : "Assets of the selected company will be included in test scope, providing domains, IPs, CIDRs, and keywords as context to the Agent."}
               </FieldDescription>
             </Field>
             <Field>
@@ -3884,7 +4035,11 @@ function CreateTaskSheet({
               </FieldLabel>
               <AssetInterceptRulesEditor value={interceptRules} onChange={setInterceptRules} />
               <FieldDescription>
-                仅对本任务生效，不写入全局规则。判定顺序：先按「拦截」规则（含全局）匹配，命中即禁止测试；未命中且本任务配置了「允许」规则时，须命中某条允许规则才放行，否则同样不允许测试；未配置任何允许规则则不启用白名单。
+                {locale === "pt"
+                  ? "Válido apenas para esta tarefa. Regras de bloqueio impedem testes; regras de permissão (se configuradas) atuam como whitelist estrita."
+                  : locale === "zh"
+                    ? "仅对本任务生效，不写入全局规则。判定顺序：先按「拦截」规则（含全局）匹配，命中即禁止测试；未命中且本任务配置了「允许」规则时，须命中某条允许规则才放行，否则同样不允许测试；未配置任何允许规则则不启用白名单。"
+                    : "Applies to this task only. Block rules prevent testing; allow rules (if set) enforce a strict whitelist."}
               </FieldDescription>
             </Field>
             <Field>
@@ -3896,7 +4051,13 @@ function CreateTaskSheet({
                 inputId="llm-profiles"
                 portalContainer={sheetContentRef}
               />
-              <FieldDescription>按列表顺序故障转移；第一项为当前配置，仅在明确额度不足时切换下一项。</FieldDescription>
+              <FieldDescription>
+                {locale === "pt"
+                  ? "Failover na ordem da lista; o primeiro é o perfil ativo, chaveando para o próximo se esgotar cota."
+                  : locale === "zh"
+                    ? "按列表顺序故障转移；第一项为当前配置，仅在明确额度不足时切换下一项。"
+                    : "Failover in list order; first item is active, switching to next only on quota exhaustion."}
+              </FieldDescription>
             </Field>
 
             {/* 高级参数默认折叠:超时/心跳/首个意图,展开才占空间,常用路径保持清爽。 */}
@@ -3927,7 +4088,11 @@ function CreateTaskSheet({
                     onChange={(e) => setTimeoutMin(e.target.value)}
                   />
                   <p className="text-muted-foreground text-xs">
-                    到点后触发优雅收尾（各 agent 写回 + planner 终局判定），任务进入 timeout 终态。
+                    {locale === "pt"
+                      ? "Ao atingir o limite, realiza encerramento gracioso e transiciona para status timeout."
+                      : locale === "zh"
+                        ? "到点后触发优雅收尾（各 agent 写回 + planner 终局判定），任务进入 timeout 终态。"
+                        : "Triggers graceful wrap-up when reached, transitioning task into timeout state."}
                   </p>
                 </div>
                 <div className="grid gap-2">
@@ -3942,8 +4107,11 @@ function CreateTaskSheet({
                     onChange={(e) => setHeartbeatMin(e.target.value)}
                   />
                   <p className="text-muted-foreground text-xs">
-                    距上轮规划结束/任务开始满该时长且期间无触发，自动触发一轮规划（兜底卡死 + 唤醒去监督在跑的
-                    worker）。下限 10 分钟。
+                    {locale === "pt"
+                      ? "Dispara rodada de planejamento se ocioso por este período (mínimo 10 minutos)."
+                      : locale === "zh"
+                        ? "距上轮规划结束/任务开始满该时长且期间无触发，自动触发一轮规划（兜底卡死 + 唤醒去监督在跑的 worker）。下限 10 分钟。"
+                        : "Triggers planning round if idle for this duration (minimum 10 minutes)."}
                   </p>
                 </div>
                 <div className="grid gap-2">
@@ -3956,8 +4124,7 @@ function CreateTaskSheet({
                     {d.tasks.createSeedIntentLabel}
                   </label>
                   <p className="text-muted-foreground text-xs">
-                    开启后创建即把「描述+目标」作为一条意图下发，worker 免等首轮规划直接开跑，跑完再由 planner
-                    接手判定/补充。CTF 等常一个 work 直接解决的场景推荐开启；关闭则走标准的先规划再执行。
+                    {d.tasks.createSeedIntentDesc}
                   </p>
                 </div>
                 <div className="grid gap-2">
@@ -3970,8 +4137,7 @@ function CreateTaskSheet({
                     {d.tasks.createCoverageLabel}
                   </label>
                   <p className="text-muted-foreground text-xs">
-                    默认开启：计算并展示测试覆盖度、态势图显示测试进度、自动累积测试范围。关闭后不再计算/展示覆盖度，
-                    态势图仅展示资产不显示进度，agent 也不再获得范围类工具。关闭不影响「关联企业资产范围」。
+                    {d.tasks.createCoverageDesc}
                   </p>
                 </div>
               </CollapsibleContent>
@@ -3981,7 +4147,7 @@ function CreateTaskSheet({
 
         <SheetFooter className="flex-row justify-end gap-2 border-t p-4">
           <SheetClose asChild>
-            <Button variant="outline">取消</Button>
+            <Button variant="outline">{d.common.cancel}</Button>
           </SheetClose>
           <Button onClick={createTask} disabled={creating || uploading}>
             {creating && <Spinner data-icon="inline-start" />}
