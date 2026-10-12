@@ -35,6 +35,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { Textarea } from "@/components/ui/textarea";
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n/i18n-context";
+import { getAgentDisplayName, getAgentDisplayDescription } from "@/lib/agent-i18n";
 import type { Agent } from "@/lib/types";
 
 const I18N = {
@@ -159,7 +160,7 @@ function AgentGridCard({ agent, onOpen, onDeleted }: { agent: Agent; onOpen: () 
       <button type="button" onClick={onOpen} className="flex flex-col gap-2 text-left">
         <div className="flex flex-wrap items-center gap-2">
           <Bot className="text-muted-foreground size-4" />
-          <span className="text-sm font-medium">{agent.name}</span>
+          <span className="text-sm font-medium">{getAgentDisplayName(agent.key, agent.name, locale)}</span>
           <span className="text-muted-foreground font-mono text-xs">{agent.key}</span>
           {agent.builtin ? (
             <Badge variant="secondary" className="px-1.5 py-0 text-[10px]">
@@ -177,7 +178,7 @@ function AgentGridCard({ agent, onOpen, onDeleted }: { agent: Agent; onOpen: () 
           )}
         </div>
         <p className="text-muted-foreground line-clamp-2 min-h-8 text-xs">
-          {agent.description ? agent.description : t.noDesc}
+          {getAgentDisplayDescription(agent.key, agent.description, locale) || t.noDesc}
         </p>
         <div className="text-muted-foreground flex flex-wrap gap-1.5 text-[10px]">
           <span className="rounded border px-1.5 py-0.5">MCP {agent.mcp_count ?? 0}</span>

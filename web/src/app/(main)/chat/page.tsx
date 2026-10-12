@@ -59,6 +59,8 @@ import { shouldSubmitOnKey, useChatSendMode } from "@/lib/chat-send-mode";
 import { getLocalStorageValue, setLocalStorageValue } from "@/lib/local-storage.client";
 import { isBtwCommand } from "@/lib/side-questions";
 import { useI18n } from "@/lib/i18n/i18n-context";
+import { getAgentDisplayName, getAgentDisplayDescription } from "@/lib/agent-i18n";
+import type { Locale } from "@/lib/i18n";
 import type { Activity, Agent, ChatAttachment, Conversation, LLMProfile } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -113,14 +115,15 @@ interface AgentGroup {
 // groupByAgent buckets conversations by agent, preserving the incoming order
 // both inside a group and across groups. The server already sorts by updated_at
 // DESC, so first-appearance order == most-recently-active group first.
-function groupByAgent(conversations: Conversation[], agentByKey: Map<string, Agent>): AgentGroup[] {
+function groupByAgent(conversations: Conversation[], agentByKey: Map<string, Agent>, locale: Locale = "en"): AgentGroup[] {
   const groups = new Map<string, AgentGroup>();
   for (const conversation of conversations) {
     let group = groups.get(conversation.agent_key);
     if (!group) {
+      const rawName = agentByKey.get(conversation.agent_key)?.name ?? conversation.agent_key;
       group = {
         key: conversation.agent_key,
-        name: agentByKey.get(conversation.agent_key)?.name ?? conversation.agent_key,
+        name: getAgentDisplayName(conversation.agent_key, rawName, locale),
         conversations: [],
         runningCount: 0,
       };
@@ -580,6 +583,7 @@ function DraftChat({
   profiles: LLMProfile[];
   onStarted: (c: Conversation, pending?: { input?: string; attachments?: ChatAttachment[] }) => void;
 }) {
+  const { locale } = useI18n();
   const t = useChatI18n();
   const [agentKey, setAgentKey] = React.useState("");
   const [llmProfileId, setLlmProfileId] = React.useState<number | null>(null);
@@ -637,7 +641,7 @@ function DraftChat({
             <SelectItem key={a.key} value={a.key}>
               <span className="flex items-center gap-2">
                 <Bot className="size-3.5" />
-                {a.name}
+                {getAgentDisplayName(a.key, a.name, locale)}
                 {!a.builtin && (
                   <Badge variant="outline" className="px-1 py-0 text-[9px]">
                     自定义
@@ -658,7 +662,7 @@ function DraftChat({
         <div className="bg-primary/10 flex size-12 items-center justify-center rounded-full">
           <Bot className="text-primary size-6" />
         </div>
-        <div className="text-sm font-medium">{t.startChatWith(agent?.name ?? "Agent")}</div>
+        <div className="text-sm font-medium">{t.startChatWith(getAgentDisplayName(agent?.key ?? "", agent?.name ?? "Agent", locale))}</div>
         {agent?.description && <p className="text-muted-foreground max-w-md text-xs">{agent.description}</p>}
       </div>
 
@@ -718,7 +722,10 @@ function ChatView({
   const loadingMoreRef = React.useRef(false); // guard: one scroll-up load at a time
   const [historyLoaded, setHistoryLoaded] = React.useState(false);
   const [hasMore, setHasMore] = React.useState(false); // drives the "load earlier" hint
+  const { locale } = useI18n();
   const agent = agents.find((a) => a.key === conv.agent_key);
+  const agentName = getAgentDisplayName(conv.agent_key, agent?.name ?? conv.agent_key, locale);
+  const agentDesc = getAgentDisplayDescription(conv.agent_key, agent?.description, locale);
   const currentProfileId = conv.llm_profile_id ?? null;
   const side = useSideQuestions(`/api/conversations/${conv.id}`);
 
@@ -978,26 +985,26 @@ function ChatView({
   }
 
   return (
-    <SideQuestionWorkspace side={side} label={agent?.name ?? conv.agent_key} composerLayout="inline">
+    <SideQuestionWorkspace side={side} label={agentName} composerLayout="inline">
       {/* header: which agent + live + token meta */}
       <div className="flex min-w-0 flex-wrap items-center gap-2 border-b px-4 py-2.5">
         <Bot className="text-muted-foreground size-4 shrink-0" />
-        <span className="min-w-0 max-w-48 truncate text-sm font-medium">{agent?.name ?? conv.agent_key}</span>
+        <span className="min-w-0 max-w-48 truncate text-sm font-medium">{agentName}</span>
         <span className="text-muted-foreground hidden shrink-0 font-mono text-xs sm:inline">{conv.agent_key}</span>
         {agent && !agent.builtin && (
           <Badge variant="outline" className="shrink-0 px-1.5 py-0 text-[10px]">
             自定义
           </Badge>
         )}
-        {agent?.description && (
-          <span className="text-muted-foreground min-w-0 truncate text-xs">{agent.description}</span>
+        {agentDesc && (
+          <span className="text-muted-foreground min-w-0 truncate text-xs">{agentDesc}</span>
         )}
         {running && <LiveBadge />}
         <SideQuestionButton side={side} />
         <div className="text-muted-foreground ml-auto flex min-w-0 max-w-full items-center justify-end gap-x-3 gap-y-1 text-xs max-sm:w-full max-sm:flex-wrap">
           {tokenTotal.turns > 0 && (
-            <span title="agent 循环轮次（模型调用次数）" className="tabular-nums">
-              {tokenTotal.turns} 轮
+            <span title={t.agentTurns} className="tabular-nums">
+              {tokenTotal.turns} {t.turnsUnit}
             </span>
           )}
           {tokenTotal.any && (
@@ -1015,7 +1022,7 @@ function ChatView({
         <div className="min-w-0 max-w-full px-4 py-3" ref={contentRef}>
           {messages.length === 0 && !running ? (
             <div className="text-muted-foreground py-10 text-center text-sm">
-              {t.startChatWith(agent?.name ?? conv.agent_key)}
+              {t.startChatWith(agentName)}
             </div>
           ) : (
             <>
@@ -1098,6 +1105,7 @@ const ConversationItem = React.memo(function ConversationItem({
   selectedForDelete: boolean;
   onSelectedForDeleteChange: (id: number, checked: boolean) => void;
 }) {
+  const { locale } = useI18n();
   const t = useChatI18n();
   const [deleteOpen, setDeleteOpen] = React.useState(false);
   const renameInputRef = React.useRef<HTMLInputElement>(null);
@@ -1166,12 +1174,12 @@ const ConversationItem = React.memo(function ConversationItem({
             {showAgent && (
               <>
                 <Bot className="size-3 shrink-0" />
-                <span className="min-w-0 truncate">{agent?.name ?? conv.agent_key}</span>
+                <span className="min-w-0 truncate">{getAgentDisplayName(conv.agent_key, agent?.name ?? conv.agent_key, locale)}</span>
                 <span className="shrink-0">·</span>
               </>
             )}
             <span className="shrink-0">
-              {new Date(conv.created_at).toLocaleDateString("zh-CN", {
+              {new Date(conv.created_at).toLocaleDateString(locale === "zh" ? "zh-CN" : locale === "pt" ? "pt-BR" : "en-US", {
                 month: "numeric",
                 day: "numeric",
                 hour: "2-digit",
@@ -1422,13 +1430,15 @@ export default function ChatPage() {
     () => visibleConversations.filter(conversationIsPinned),
     [visibleConversations],
   );
+  const { locale } = useI18n();
   const agentGroups = React.useMemo(
     () =>
       groupByAgent(
         visibleConversations.filter((c) => !conversationIsPinned(c)),
         agentByKey,
+        locale,
       ),
-    [visibleConversations, agentByKey],
+    [visibleConversations, agentByKey, locale],
   );
   // conversation agents: custom agents + conversational built-ins (role=assistant,
   // e.g. Auto / 渗透测试). The orchestration built-ins (goals/planner/mainagent/worker)
@@ -1443,9 +1453,12 @@ export default function ChatPage() {
     const keys = new Set([...chatAgents.map((agent) => agent.key), ...counts.keys()]);
     if (agentFilter !== null) keys.add(agentFilter);
     return [...keys]
-      .map((key) => ({ key, name: agentByKey.get(key)?.name || key, count: counts.get(key) ?? 0 }))
-      .sort((a, b) => a.name.localeCompare(b.name, "zh-CN"));
-  }, [convs, chatAgents, agentByKey, agentFilter]);
+      .map((key) => {
+        const rawName = agentByKey.get(key)?.name || key;
+        return { key, name: getAgentDisplayName(key, rawName, locale), count: counts.get(key) ?? 0 };
+      })
+      .sort((a, b) => a.name.localeCompare(b.name, locale === "zh" ? "zh-CN" : "en"));
+  }, [convs, chatAgents, agentByKey, agentFilter, locale]);
   const conversationCountLabel =
     agentFilter === null ? t.totalConvs(convs.length) : t.filteredConvs(filteredConversations.length, convs.length);
 

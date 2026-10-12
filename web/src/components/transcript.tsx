@@ -26,6 +26,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { api } from "@/lib/api";
 import { useI18n } from "@/lib/i18n/i18n-context";
 import type { Activity, InterceptPending } from "@/lib/types";
+import { localizeTranscriptText } from "@/lib/transcript-i18n";
 
 const I18N = {
   en: {
@@ -626,7 +627,7 @@ function MessageBlock({
   const speak = group.steps.filter((s) => s.kind !== "thinking");
   const hasThinking = group.steps.some((s) => s.kind === "thinking");
   const isError = group.steps.some((s) => s.is_error);
-  const body = (speak.length ? speak : group.steps).map((s) => s.summary).join("  ") || "…";
+  const body = (speak.length ? speak : group.steps).map((s) => localizeTranscriptText(s.summary, locale)).join("  ") || "…";
   const Icon = isError ? Flag : MessageSquare;
   const tone = isError ? "text-red-600 dark:text-red-400" : "text-foreground";
 
@@ -773,6 +774,7 @@ function UserRow({
 // collapsed. The summary is a truncated first line, so the full text is pulled
 // from the detail and shown inline.
 function AnswerBlock({ step, getDetail }: { step: Activity; getDetail: (seq: number) => Promise<string> }) {
+  const { locale } = useI18n();
   const [ref, inView] = useInView();
   const [full, setFull] = React.useState<string | null>(null);
   React.useEffect(() => {
@@ -789,6 +791,10 @@ function AnswerBlock({ step, getDetail }: { step: Activity; getDetail: (seq: num
       live = false;
     };
   }, [inView, step.seq, getDetail, step.summary]);
+
+  const rawText = full ?? step.summary;
+  const displayText = React.useMemo(() => localizeTranscriptText(rawText, locale), [rawText, locale]);
+
   return (
     <div ref={ref} className="mb-2 mt-1 flex min-w-0 flex-col gap-1">
       <div
@@ -798,9 +804,9 @@ function AnswerBlock({ step, getDetail }: { step: Activity; getDetail: (seq: num
         }
       >
         {step.is_error ? (
-          <span className="whitespace-pre-wrap">{full ?? step.summary}</span>
+          <span className="whitespace-pre-wrap">{displayText}</span>
         ) : (
-          <Markdown text={full ?? step.summary} />
+          <Markdown text={displayText} />
         )}
       </div>
       <ActivityTime ts={step.ts} />
